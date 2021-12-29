@@ -8,6 +8,7 @@ pandas = "*"
 tqdm = "*"
 requests = "*"
 beautifulsoup4 = "*"
+nltk = "*"
 
 [dev-packages]
 

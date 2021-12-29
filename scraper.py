@@ -67,12 +67,9 @@ def clean_topics(df: pd.DataFrame) -> pd.DataFrame:
 	return df
 
 def get_data():
-	if os.path.exists(TOPIC_LISTS):
-		df = pd.read_csv(TOPIC_LISTS, index_col='Unnamed: 0')
-	else:
-		df = parse_wiki('Lists_of_mathematics_topics', endings=('v', 'see also', 'equations named after people'))
-		df.drop('List_of_numbers', inplace=True) # We don't want the list of nubmers
-		df.to_csv(TOPIC_LISTS)
+	df = parse_wiki('Lists_of_mathematics_topics', endings=('equations named after people'))
+	df.drop('List_of_numbers', inplace=True) # We don't want the list of nubmers
+	df.to_csv(TOPIC_LISTS)
 
 	articles = []
 	for uri in tqdm(df.index):
@@ -81,7 +78,6 @@ def get_data():
 		articles.append(a)
 	# Combine into one dataframe
 	df = pd.concat(articles)
-	# df = pd.read_csv(TOPICS, index_col='Unnamed: 0')
 	df = clean_topics(df)
 	df.to_csv(TOPICS)
 
