@@ -1,8 +1,8 @@
-import os
 from bs4 import BeautifulSoup
 from bs4.element import PageElement
 from requests import get
 from tqdm import tqdm
+from urllib.parse import unquote
 
 import pandas as pd
 from util import TOPIC_LISTS, TOPICS, WIKI_URL
@@ -64,6 +64,8 @@ def clean_topics(df: pd.DataFrame) -> pd.DataFrame:
 	# h1 column is empty
 	if not any(df['h1']):
 		df.drop('h1', axis='columns', inplace=True)
+	# Convert from URI to UTF-8
+	df.index = df.index.map(unquote)
 	return df
 
 def get_data():
