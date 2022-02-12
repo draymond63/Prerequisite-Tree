@@ -1,39 +1,13 @@
 import os
-from typing import List
-from requests import get
 import pandas as pd
 from tqdm import tqdm
 from nltk.corpus import stopwords
 import nltk
 
-from util import COMPLEXITY, TOPICS
+from util import COMPLEXITY, TOPICS, get_text
 
 nltk.download("stopwords")
 nltk.download('punkt')
-
-# mediawiki.org/w/api.php?action=help&modules=query%2Bextracts
-def get_text(site, ignore=False):
-    url = f"https://en.wikipedia.org/w/api.php?"
-    resp = get(url, params={
-        'action': 'query',
-        'format': 'json',
-        'origin': '*',
-        'titles': site,
-        'prop': 'extracts',
-        'explaintext': 1,
-        'exsectionformat': 'plain',
-        'exlimit': 1
-    }).json()
-    try:
-        # Parse out extract
-        pages = list(resp['query']['pages'].values())
-        for page in pages:
-            if page and 'extract' in page:
-                return page['extract']
-    except (KeyError, IndexError) as e:
-        if not ignore:
-            raise e
-        return ""
 
 # ! Unused
 # Type-Token Ration (TTR)
