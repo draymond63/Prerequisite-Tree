@@ -1,8 +1,6 @@
 <template>
-  <ul v-for="article in articles">
-    <li :key="article">
-      <NuxtLink :to="'/topic/' + article">{{ article }}</NuxtLink>
-    </li>
+  <ul class="flex flex-col items-center">
+    <TopicEntry v-for="article in articles" :key="article" :title="article" />
   </ul>
 </template>
 
@@ -27,6 +25,7 @@ export default {
       if ((!(typeof q === 'string')) || q === '') {
         return { results: [] };
       }
+      // https://en.wikipedia.org/wiki/Special:ApiSandbox#action=query&format=json&prop=extracts&list=&meta=&generator=allpages&converttitles=1&formatversion=2&exintro=1&explaintext=1&exsectionformat=plain&gapfrom=Control%20Systems&gaplimit=3
       const URL = "https://en.wikipedia.org/w/api.php?";
       const queryParams: Record<string, string> = {
         "action": "query",

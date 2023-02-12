@@ -11,6 +11,7 @@
     "nuxt": "^3.0.0"
   },
   "dependencies": {
-    "@nuxtjs/tailwindcss": "^6.4.0"
+    "@nuxtjs/tailwindcss": "^6.4.0",
+    "@tailwindcss/line-clamp": "^0.4.2"
   }
 }

@@ -13,4 +13,4 @@
     </header>
     <slot />
   </div>
-</template>  
+</template>

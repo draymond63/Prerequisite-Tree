@@ -1,3 +1,5 @@
+const plugin = require('tailwindcss/plugin')
+
 module.exports = {
   theme: {
     colors: {
@@ -22,5 +24,22 @@ module.exports = {
         dark: '#590082',
       },
     },
-  }
+    fontFamily: {
+      sans: ['Roboto', 'sans-serif'],
+    },
+  },
+  plugins: [
+    plugin(function({ addBase, theme }: { addBase: (...args: any) => void, theme: (...args: any) => void }) {
+      addBase({
+        'h1': { fontSize: theme('fontSize.2xl') },
+        'h2': { fontSize: theme('fontSize.xl') },
+        'h3': { fontSize: theme('fontSize.lg') },
+        'p': {
+          fontSize: theme('fontSize.sm'),
+          fontWeight: theme('fontWeight.light'),
+        },
+      })
+    }),
+    require('@tailwindcss/line-clamp'),
+  ]
 }
