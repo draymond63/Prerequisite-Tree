@@ -1,33 +1,27 @@
 <template>
-  <ul class="flex flex-col items-center">
+  <ul class="flex flex-col items-center px-8">
     <TopicEntry v-for="article in articles" :key="article" :title="article" />
   </ul>
 </template>
 
 <script lang="ts">
 export default {
-  name: 'SearchBar',
-  data() {
-    return {
-      articles: [],
-    };
+  data: () => ({
+    articles: [] as Array<string>,
+  }),
+  watchQuery: ['q'],
+  created() {
+    this.search();
   },
-  async created() {
-    const results = await this.fetch();
-    if (results) {
-      this.articles = this.parseResults(results)
-    }
+  updated() {
+    this.search();
   },
   methods: {
-    async fetch() {
+    async search() {
       const router = useRouter();
       const { q } = router.currentRoute.value.query;
-      if ((!(typeof q === 'string')) || q === '') {
-        return { results: [] };
-      }
-      // https://en.wikipedia.org/wiki/Special:ApiSandbox#action=query&format=json&prop=extracts&list=&meta=&generator=allpages&converttitles=1&formatversion=2&exintro=1&explaintext=1&exsectionformat=plain&gapfrom=Control%20Systems&gaplimit=3
-      const URL = "https://en.wikipedia.org/w/api.php?";
-      const queryParams: Record<string, string> = {
+      const URL = "https://en.wikipedia.org/w/api.php";
+      const params = {
         "action": "query",
         "format": "json",
         "prop": "extracts",
@@ -39,19 +33,16 @@ export default {
         "exintro": "1",
         "explaintext": "1",
         "exsectionformat": "plain",
-        "gapfrom": q.toString(),
+        "gapfrom": (q ?? '').toString(),
         "gaplimit": "3"
       };
-      const request = URL + new URLSearchParams(queryParams).toString();
-      return await useFetch(request);
+      const { data } = await useFetch(URL, { params });
+      this.articles = this.parseResults(data);
     },
-    parseResults(results: any) {
-      const pages = results['data']['value']['query']['pages']
-      if (pages) {
-        return pages.map(({ title }: {title: any}) => title);
-      }
-      return []
+    parseResults (results: any): Array<string> {
+      const pages = results['value']['query']['pages'] || [];
+      return pages.map(({ title }: {title: any}) => title);
     }
-  },
-};
+  }
+}
 </script>

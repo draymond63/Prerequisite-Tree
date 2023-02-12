@@ -1,5 +1,5 @@
 <template>
-  <li class="w-2/3 p-2">
+  <li class="w-full max-w-3xl p-2">
     <NuxtLink :to="'/topic/' + title">
       <div class="w-full flex">
         <img class="w-32 h-32 m-1 mr-3 border-secondary border-8" src="https://picsum.photos/seed/picsum/600/400" alt="Placeholder" />
