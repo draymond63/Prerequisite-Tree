@@ -1,3 +1,5 @@
+import { fetchWiki, APIStatus } from "../utils";
+
 export default defineEventHandler(async (event): Promise<Topic | null> => {
   const topic = getQuery(event)['topic'];
   if (topic === null || topic === undefined || topic === "" || typeof(topic) !== "string") {
@@ -23,7 +25,6 @@ const getPrerequisites = async (topic: string): Promise<string[]> => {
 
 // TODO: Filter results by views, number of links, etc.
 const getRelatedArticles = async (topic: string): Promise<string[]> => {
-  const URL = "https://en.wikipedia.org/w/api.php";
   const params = {
     "action": "query",
     "format": "json",
@@ -32,18 +33,12 @@ const getRelatedArticles = async (topic: string): Promise<string[]> => {
     "formatversion": "2",
     "pllimit": "max"
   };
-  try {
-    const results = await $fetch(URL, { params }) as any;
-    console.log("Results:", results);
-    if (results['error']) {
-      return [results['error']['info']];
-    }
-    const links: WikiLinksResponse = results['query']['pages'][0]['links'] || [];
-    return links.map(({ title }) => title);
-  } catch(err) {
-    console.error(err);
+  const [results, status] = await fetchWiki<WikiLinksResponse>(params);
+  if (status !== APIStatus.OKAY) {
     return [];
   }
+  const links = results['query']['pages'][0]['links'] || [];
+  return links.map(({ title }) => title);
 }
 
 const getDescription = async (topic: string): Promise<string> => {

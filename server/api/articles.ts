@@ -1,16 +1,17 @@
+import { fetchWiki, APIStatus } from "../utils";
+
 export default defineEventHandler(async (event): Promise<Article[]> => {
   const query = getQuery(event)['q'];
   if (query === null || query === undefined || query === "" || typeof(query) !== "string") {
     console.error("Invalid query:", query);
     return [];
   }
-  let articles = await getArticles(query);
+  let articles = await searchArticles(query);
   // TODO: Filter results by views, number of links, etc.
   return articles.filter((article) => article.wordcount > 3000);
 });
 
-const getArticles = async (query: string): Promise<Article[]> => {
-  const URL = "https://en.wikipedia.org/w/api.php";
+const searchArticles = async (query: string): Promise<Article[]> => {
   const params = {
     "action": "query",
     "format": "json",
@@ -24,21 +25,16 @@ const getArticles = async (query: string): Promise<Article[]> => {
     "gsrinfo": "totalhits|suggestion|rewrittenquery",
     "gsrprop": "size|timestamp|snippet|wordcount"
   };
-  try {
-    const results = await $fetch(URL, { params }) as any;
-    if (results['error']) {
-      return [results['error']['info']];
-    }
-    const pages: WikiArticleResponse[] = results['query']['pages'] || [];
-    const sortedPages = pages.sort((a, b) => a.index - b.index);
-    return sortedPages.map((page) => ({
-      id: page.pageid,
-      wordcount: page.wordcount,
-      title: page.title,
-      extract: page.extract
-    }));
-  } catch(err) {
-    console.error(err);
+  const [results, status] = await fetchWiki<WikiArticleResponse>(params);
+  if (status !== APIStatus.OKAY) {
     return [];
   }
+  const pages = results['query']['pages'] || [];
+  const sortedPages = pages.sort((a, b) => a.index - b.index);
+  return sortedPages.map((page) => ({
+    id: page.pageid,
+    wordcount: page.wordcount,
+    title: page.title,
+    extract: page.extract
+  }));
 }

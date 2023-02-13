@@ -1,3 +1,15 @@
+interface WikiResponse<T> {
+  continue?: {
+    continue: string;
+  };
+  error?: {
+    info: string;
+  }
+  query: {
+    pages: T[];
+  };
+}
+
 interface WikiArticleResponse {
   ns: number;
   title: string;
@@ -9,10 +21,12 @@ interface WikiArticleResponse {
   timestamp: string;
 }
 
-type WikiLinksResponse = Array<{
-  ns: number;
-  title: string;
-}>
+type WikiLinksResponse = {
+  links: {
+    ns: number;
+    title: string;
+  }[];
+};
 
 interface Article {
   id: number;
