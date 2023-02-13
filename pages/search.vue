@@ -1,6 +1,6 @@
 <template>
   <ul class="flex flex-col items-center px-8">
-    <TopicEntry v-for="article in articles" :key="article" :title="article" />
+    <TopicEntry v-for="article in articles" :key="article.title" :article="article" />
   </ul>
 </template>
 
