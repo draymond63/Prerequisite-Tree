@@ -9,7 +9,7 @@ interface Article {
 interface Topic {
   title: string;
   description: string;
-  prereqs: string[];
+  prereqs: TopicsMetaData;
 }
 
 interface TopicMetaData {

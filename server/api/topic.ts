@@ -7,10 +7,10 @@ export default defineEventHandler(async (event): Promise<Topic | null> => {
     return null;
   }
   const topicInfo = (await getTopicInfo([topic]))[topic];
-  const subTopicInfo = await getTopicInfo(topicInfo?.links ?? [], { links: true, description: false, pageviews: true });
+  const subTopicInfo = await getTopicInfo(topicInfo?.links ?? [], { links: true, description: true, pageviews: true });
   console.log("sub-topics:", Object.keys(subTopicInfo).length);
   const prereqs = filterTopics(subTopicInfo);
-  console.log("prereqs:", prereqs.length);
+  console.log("prereqs:", Object.keys(prereqs).length);
 
   return {
     title: topic,
@@ -20,11 +20,11 @@ export default defineEventHandler(async (event): Promise<Topic | null> => {
 });
 
 // TODO: Filter to top 100? articles
-const filterTopics = (topicsInfo: TopicsMetaData): string[] => {
-  return Object.keys(Object.fromEntries(Object.entries(topicsInfo).filter(([title, {links, pageviews}]) => 
+const filterTopics = (topicsInfo: TopicsMetaData): TopicsMetaData => {
+  return Object.fromEntries(Object.entries(topicsInfo).filter(([title, {links, pageviews}]) => 
     pageviews && pageviews > 5000
     // && links && links.length > 5 // TODO: Link retrieval is broken
-  )));
+  ));
 }
 
 const getTopicInfo = async (
@@ -64,6 +64,5 @@ const getTopicInfo = async (
     if (pageviews) metadata[title]['pageviews'] = Object.values(pageviews).reduce((a, b) => a + b, 0);
     if (description) metadata[title]['description'] = extract;
   });
-  console.log(metadata);
   return metadata;
 }

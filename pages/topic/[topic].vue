@@ -2,7 +2,11 @@
   <div>
     <h1>{{ data?.title }}</h1>
     <p>{{ data?.description }}</p>
-    <p v-for="prereq in data?.prereqs" :key="prereq">{{ prereq }}</p>
+    <h2>Prerequisites</h2>
+    <div v-for="[prereq, prereqInfo] in Object.entries(data?.prereqs)" :key="prereq">
+      <h3>{{ prereq }}</h3>
+      <p>{{ prereqInfo.description }}</p>
+    </div>
   </div>
 </template>
 
