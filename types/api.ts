@@ -10,6 +10,18 @@ interface WikiResponse<T> {
   };
 }
 
+interface WikiMediaResponse {
+  items?: {
+    project: string;
+    article: string;
+    granularity: string;
+    timestamp: string;
+    access: string;
+    agent: string;
+    views: number;
+  }[]
+}
+
 interface WikiArticleResponse {
   ns: number;
   title: string;
