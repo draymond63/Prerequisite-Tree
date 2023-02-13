@@ -6,74 +6,64 @@ export default defineEventHandler(async (event): Promise<Topic | null> => {
     console.error("Invalid topic!:", topic);
     return null;
   }
-  const description = await getDescription(topic);
-  const prereqs = await getPrerequisites(topic);
+  const topicInfo = (await getTopicInfo([topic]))[topic];
+  const subTopicInfo = await getTopicInfo(topicInfo?.links ?? [], { links: true, description: false, pageviews: true });
+  console.log("sub-topics:", Object.keys(subTopicInfo).length);
+  const prereqs = filterTopics(subTopicInfo);
+  console.log("prereqs:", prereqs.length);
 
   return {
     title: topic,
-    description,
-    prereqs: prereqs,
+    description: topicInfo?.description ?? "",
+    prereqs,
   };
 });
 
-const getPrerequisites = async (topic: string): Promise<string[]> => {
-  const relatedArticles = await getRelatedArticles(topic);
-  // TODO: Get prereqs from related articles using GPT-3
-  // TODO: Filter out topics that are not existing articles
-  return relatedArticles
+// TODO: Filter to top 100? articles
+const filterTopics = (topicsInfo: TopicsMetaData): string[] => {
+  return Object.keys(Object.fromEntries(Object.entries(topicsInfo).filter(([title, {links, pageviews}]) => 
+    pageviews && pageviews > 5000
+    // && links && links.length > 5 // TODO: Link retrieval is broken
+  )));
 }
 
-const getRelatedArticles = async (topic: string): Promise<string[]> => {
-  const params = {
+const getTopicInfo = async (
+  topics: string[],
+  { links, description, pageviews } = {
+    links: true,
+    description: true,
+    pageviews: false,
+  }
+): Promise<TopicsMetaData> => {
+  const props = [];
+  if (links) props.push('links')
+  if (pageviews) props.push('pageviews');
+  if (description) props.push('extracts');
+  const params: Record<string, any> = {
     "action": "query",
     "format": "json",
-    "prop": "links",
-    "titles": topic,
+    "prop": props.join('|'),
+    "titles": topics.slice(0, 50).join('|'),
     "formatversion": "2",
-    "pllimit": "max"
+    "pllimit": "max",
   };
-  const [results, status] = await fetchWiki<WikiLinksResponse>(params);
+  if (description) {
+    params["exintro"] = 1;
+    params["explaintext"] = 1;
+    params["exsectionformat"] = "plain";
+  }
+  const [results, status] = await fetchWiki<WikiTopicResponse>(params);
   if (status !== APIStatus.OKAY) {
-    return [];
+    return {};
   }
-  const links = results['query']['pages'][0]['links'] || [];
-  const linkTitles = links.map(({ title }) => title);
-  return filterLinks(linkTitles);
-}
 
-// TODO: Filter results by number of links
-// TODO: https://stackoverflow.com/questions/5323589/how-to-use-wikipedia-api-to-get-the-page-view-statistics-of-a-particular-page-in
-const filterLinks = async (articles: string[]): Promise<string[]> => {
-  console.log(articles.length)
-  const resultPromises: Promise<WikiMediaResponse>[] = [];
-  for (const i in articles) {
-    const path = [
-      "en.wikipedia",
-      "all-access", // or "desktop" or "mobile-app" or "mobile-web"
-      "user", // or "spider" or "all-agents"
-      encodeURIComponent(articles[i]),
-      "monthly", // or "daily" or "hourly"
-      "20230101",
-      "20230201",
-    ];
-    const URL = "https://wikimedia.org/api/rest_v1/metrics/pageviews/per-article/" + path.join("/");
-    resultPromises.push($fetch(URL).catch(r => ({})) as Promise<WikiMediaResponse>);
-  }
-  const results = await Promise.all(resultPromises);
-  const viewCountEntries: [string, number][] = results.map((result) => {
-    if (result.items) {
-      const article = result.items[0].article;
-      const viewCount = result.items.reduce((acc, { views }) => acc + views, 0);
-      return [article, viewCount];
-    }
-    else {
-      return ["", 0];
-    }
+  const metadata: Record<string, Record<string, any>> = {};
+  results['query']['pages'].forEach(({ title, links, pageviews, extract }) => {
+    metadata[title] = {};
+    if (links) metadata[title]['links'] = links.map(({ title }) => title);
+    if (pageviews) metadata[title]['pageviews'] = Object.values(pageviews).reduce((a, b) => a + b, 0);
+    if (description) metadata[title]['description'] = extract;
   });
-  // const viewCounts = Object.fromEntries(viewCountEntries);
-  return viewCountEntries.filter(([_, views]) => views > 5000).map(([article, _]) => article);
-}
-
-const getDescription = async (topic: string): Promise<string> => {
-  return ""
+  console.log(metadata);
+  return metadata;
 }

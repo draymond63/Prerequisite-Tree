@@ -15,7 +15,8 @@ const searchArticles = async (query: string): Promise<Article[]> => {
   const params = {
     "action": "query",
     "format": "json",
-    "prop": "extracts",
+    "prop": ["extracts", "pageimages"].join('|'),
+    "pithumbsize": 300,
     "generator": "search",
     "formatversion": "2",
     "exintro": 1,
@@ -25,7 +26,7 @@ const searchArticles = async (query: string): Promise<Article[]> => {
     "gsrinfo": "totalhits|suggestion|rewrittenquery",
     "gsrprop": "size|timestamp|snippet|wordcount"
   };
-  const [results, status] = await fetchWiki<WikiArticleResponse>(params);
+  const [results, status] = await fetchWiki<WikiSearchResponse>(params);
   if (status !== APIStatus.OKAY) {
     return [];
   }
@@ -35,6 +36,7 @@ const searchArticles = async (query: string): Promise<Article[]> => {
     id: page.pageid,
     wordcount: page.wordcount,
     title: page.title,
-    extract: page.extract
+    extract: page.extract,
+    image: page.thumbnail?.source,
   }));
 }

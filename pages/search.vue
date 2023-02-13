@@ -6,5 +6,5 @@
 
 <script lang="ts" setup>
 const route = useRoute()
-const { data: articles } = await useFetch(() => `/api/articles?q=${route.query.q}`);
+const { data: articles } = await useFetch(() => `/api/search?q=${route.query.q}`);
 </script>
