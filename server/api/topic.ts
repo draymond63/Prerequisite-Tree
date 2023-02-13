@@ -6,10 +6,18 @@ export default defineEventHandler(async (event): Promise<Topic | null> => {
     console.error("Invalid topic!:", topic);
     return null;
   }
-  const topicInfo = (await getTopicInfo([topic]))[topic];
-  const subTopicInfo = await getTopicInfo(topicInfo?.links ?? [], { links: true, description: true, pageviews: true });
+  const topicInfo = (await getTopicInfo([topic], ['links', 'extracts']))[topic];
+  const subTopicInfo = await getTopicInfo(topicInfo?.links ?? [], ['links', 'extracts', 'pageviews']);
   console.log("sub-topics:", Object.keys(subTopicInfo).length);
-  const prereqs = filterTopics(subTopicInfo);
+
+  const possiblePrereqs = filterTopics(subTopicInfo);
+  console.log("possiblePrereqs:", Object.keys(possiblePrereqs).length);
+
+  const prereqTitles = await queryGPT(possiblePrereqs);
+
+  const prereqs = Object.fromEntries(Object.entries(possiblePrereqs).filter(
+    ([title, info]) => prereqTitles.includes(title)
+  ));
   console.log("prereqs:", Object.keys(prereqs).length);
 
   return {
@@ -19,50 +27,51 @@ export default defineEventHandler(async (event): Promise<Topic | null> => {
   };
 });
 
+// TODO: Get GPT response
+const queryGPT = async (topicsInfo: TopicsMetaData): Promise<string[]> => {
+  return Object.keys(topicsInfo);
+}
+
 // TODO: Filter to top 100? articles
 const filterTopics = (topicsInfo: TopicsMetaData): TopicsMetaData => {
-  return Object.fromEntries(Object.entries(topicsInfo).filter(([title, {links, pageviews}]) => 
-    pageviews && pageviews > 5000
-    // && links && links.length > 5 // TODO: Link retrieval is broken
+  return Object.fromEntries(Object.entries(topicsInfo).filter(([title, {links, pageviews, description}]) => 
+    pageviews && pageviews > 1000
+    // && links && links.length > 5 // TODO: Link retrieval is maxed out ?
+    && description
   ));
 }
 
+// TODO: Add image property
 const getTopicInfo = async (
   topics: string[],
-  { links, description, pageviews } = {
-    links: true,
-    description: true,
-    pageviews: false,
-  }
+  props = ['links', 'extracts', 'pageviews', 'pageimage']
 ): Promise<TopicsMetaData> => {
-  const props = [];
-  if (links) props.push('links')
-  if (pageviews) props.push('pageviews');
-  if (description) props.push('extracts');
   const params: Record<string, any> = {
-    "action": "query",
-    "format": "json",
-    "prop": props.join('|'),
-    "titles": topics.slice(0, 50).join('|'),
-    "formatversion": "2",
-    "pllimit": "max",
+    action: "query",
+    format: "json",
+    prop: props.join('|'),
+    titles: topics.slice(0, 50).join('|'), // TODO: Allow for more topics
+    formatversion: "2",
+    pllimit: "max",
   };
-  if (description) {
-    params["exintro"] = 1;
-    params["explaintext"] = 1;
-    params["exsectionformat"] = "plain";
+  if (props.includes('extracts')) {
+    params.exintro = 1;
+    params.explaintext = 1;
+    params.exsectionformat = "plain";
   }
   const [results, status] = await fetchWiki<WikiTopicResponse>(params);
   if (status !== APIStatus.OKAY) {
     return {};
   }
+  console.log(results);
 
   const metadata: Record<string, Record<string, any>> = {};
   results['query']['pages'].forEach(({ title, links, pageviews, extract }) => {
     metadata[title] = {};
-    if (links) metadata[title]['links'] = links.map(({ title }) => title);
-    if (pageviews) metadata[title]['pageviews'] = Object.values(pageviews).reduce((a, b) => a + b, 0);
-    if (description) metadata[title]['description'] = extract;
+    if (props.includes('links')) metadata[title]['links'] = links?.map(({ title }) => title);
+    if (props.includes('extracts')) metadata[title]['description'] = extract;
+    if (props.includes('pageviews'))
+      metadata[title]['pageviews'] = Object.values(pageviews ?? {}).reduce((a, b) => a + b, 0);
   });
   return metadata;
 }
