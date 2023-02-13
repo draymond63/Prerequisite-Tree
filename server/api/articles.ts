@@ -1,52 +1,44 @@
-// TODO: Filter results by views, number of links, etc.
-
-export default defineEventHandler(async (event): Promise<Array<Article>> => {
+export default defineEventHandler(async (event): Promise<Article[]> => {
   const query = getQuery(event)['q'];
-  if (query === null || query === undefined || query === "") {
-    console.error("error: query is null or undefined or empty");
+  if (query === null || query === undefined || query === "" || typeof(query) !== "string") {
+    console.error("Invalid query:", query);
     return [];
   }
+  let articles = await getArticles(query);
+  // TODO: Filter results by views, number of links, etc.
+  return articles.filter((article) => article.wordcount > 3000);
+});
+
+const getArticles = async (query: string): Promise<Article[]> => {
   const URL = "https://en.wikipedia.org/w/api.php";
   const params = {
     "action": "query",
     "format": "json",
-    "list": "search",
+    "prop": "extracts",
+    "generator": "search",
     "formatversion": "2",
-    "srsearch": query,
+    "exintro": 1,
+    "explaintext": 1,
+    "exsectionformat": "plain",
+    "gsrsearch": query,
+    "gsrinfo": "totalhits|suggestion|rewrittenquery",
+    "gsrprop": "size|timestamp|snippet|wordcount"
   };
   try {
     const results = await $fetch(URL, { params }) as any;
     if (results['error']) {
       return [results['error']['info']];
     }
-    const pages: Array<WikiArticleResponse> = results['query']['search'] || [];
-    return pages.map((page) => ({
+    const pages: WikiArticleResponse[] = results['query']['pages'] || [];
+    const sortedPages = pages.sort((a, b) => a.index - b.index);
+    return sortedPages.map((page) => ({
       id: page.pageid,
       wordcount: page.wordcount,
       title: page.title,
-      snippet: page.snippet
+      extract: page.extract
     }));
   } catch(err) {
     console.error(err);
     return [];
   }
-})
-
-/*
-"query": {
-  "searchinfo": {
-    "totalhits": 66753
-  },
-  "search": [
-    {
-      "ns": 0,
-      "title": "Control theory",
-      "pageid": 7039,
-      "size": 55379,
-      "wordcount": 7315,
-      "snippet": "<span class=\"searchmatch\">Control</span> <span class=\"searchmatch\">theory</span> is a field of mathematics that deals with the <span class=\"searchmatch\">control</span> of dynamical systems in engineered processes and machines. The objective is to develop",
-      "timestamp": "2023-02-02T07:36:42Z"
-    },
-  ]
 }
-*/

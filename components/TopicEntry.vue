@@ -4,8 +4,11 @@
       <div class="w-full flex">
         <img class="w-32 h-32 m-1 mr-3 border-secondary border-8" src="https://picsum.photos/seed/picsum/600/400" alt="Placeholder" />
         <div class="h-min px-4 py-2 bg-white rounded-md shadow-lg shadow-slate-50">
-          <h2>{{ article.title }}</h2>
-          <p class="line-clamp-4" v-html="article.snippet" />
+          <div class="flex">
+            <h2>{{ article.title }}</h2>
+            <p>{{ article.wordcount }}</p>
+          </div>
+          <p class="line-clamp-4" v-html="article.extract" />
         </div>
       </div>
     </NuxtLink>
