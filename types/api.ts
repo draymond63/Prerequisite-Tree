@@ -9,6 +9,7 @@ interface Article {
 interface Topic {
   title: string;
   description: string;
+  image: string;
   prereqs: TopicsMetaData;
 }
 
@@ -16,6 +17,7 @@ interface TopicMetaData {
   links?: string[];
   pageviews?: number;
   description?: string;
+  image?: string;
 }
 
 type TopicsMetaData = Record<string, TopicMetaData>;

@@ -40,4 +40,10 @@ interface WikiTopicResponse {
     ns: number;
     title: string;
   }[];
+  thumbnail?: {
+    source: string;
+    width: number;
+    height: number;
+  },
+  pageimage?: string;
 }

@@ -6,7 +6,8 @@ export default defineEventHandler(async (event): Promise<Topic | null> => {
     console.error("Invalid topic!:", topic);
     return null;
   }
-  const topicInfo = (await getTopicInfo([topic], ['links', 'extracts']))[topic];
+  const topicInfo = (await getTopicInfo([topic], ['links', 'extracts', 'pageimages']))[topic];
+  console.log(topicInfo);
   const subTopicInfo = await getTopicInfo(topicInfo?.links ?? [], ['links', 'extracts', 'pageviews']);
   console.log("sub-topics:", Object.keys(subTopicInfo).length);
 
@@ -22,6 +23,7 @@ export default defineEventHandler(async (event): Promise<Topic | null> => {
 
   return {
     title: topic,
+    image: topicInfo?.image ?? "",
     description: topicInfo?.description ?? "",
     prereqs,
   };
@@ -44,7 +46,7 @@ const filterTopics = (topicsInfo: TopicsMetaData): TopicsMetaData => {
 // TODO: Add image property
 const getTopicInfo = async (
   topics: string[],
-  props = ['links', 'extracts', 'pageviews', 'pageimage']
+  props = ['links', 'extracts', 'pageviews', 'pageimages']
 ): Promise<TopicsMetaData> => {
   const params: Record<string, any> = {
     action: "query",
@@ -54,6 +56,7 @@ const getTopicInfo = async (
     formatversion: "2",
     pllimit: "max",
   };
+  if (props.includes('pageimages')) params.pithumbsize = 600
   if (props.includes('extracts')) {
     params.exintro = 1;
     params.explaintext = 1;
@@ -63,15 +66,15 @@ const getTopicInfo = async (
   if (status !== APIStatus.OKAY) {
     return {};
   }
-  console.log(results);
 
   const metadata: Record<string, Record<string, any>> = {};
-  results['query']['pages'].forEach(({ title, links, pageviews, extract }) => {
+  results['query']['pages'].forEach(({ title, links, pageviews, extract, thumbnail }) => {
     metadata[title] = {};
-    if (props.includes('links')) metadata[title]['links'] = links?.map(({ title }) => title);
-    if (props.includes('extracts')) metadata[title]['description'] = extract;
+    if (props.includes('links')) metadata[title].links = links?.map(({ title }) => title);
+    if (props.includes('extracts')) metadata[title].description = extract;
+    if (props.includes('pageimages')) metadata[title].image = thumbnail?.source ?? "";
     if (props.includes('pageviews'))
-      metadata[title]['pageviews'] = Object.values(pageviews ?? {}).reduce((a, b) => a + b, 0);
+      metadata[title].pageviews = Object.values(pageviews ?? {}).reduce((a, b) => a + b, 0);
   });
   return metadata;
 }
