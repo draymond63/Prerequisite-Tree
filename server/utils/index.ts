@@ -2,6 +2,7 @@ export const fetchWiki = async <T>(params: Record<string, any>): Promise<[WikiRe
   const URL = "https://en.wikipedia.org/w/api.php";
   const results = await $fetch(URL, { params }) as WikiResponse<T>;
   if (results['error']) {
+    console.log('error:', results['error'])
     return [results, APIStatus.WIKI_FAILURE];
   }
   return [results, APIStatus.OKAY];

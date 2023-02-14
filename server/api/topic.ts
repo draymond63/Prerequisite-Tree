@@ -7,7 +7,6 @@ export default defineEventHandler(async (event): Promise<Topic | null> => {
     return null;
   }
   const topicInfo = (await getTopicInfo([topic], ['links', 'extracts', 'pageimages']))[topic];
-  console.log(topicInfo);
   const subTopicInfo = await getTopicInfo(topicInfo?.links ?? [], ['links', 'extracts', 'pageviews']);
   console.log("sub-topics:", Object.keys(subTopicInfo).length);
 
@@ -43,8 +42,24 @@ const filterTopics = (topicsInfo: TopicsMetaData): TopicsMetaData => {
   ));
 }
 
-// TODO: Add image property
 const getTopicInfo = async (
+  topics: string[],
+  props = ['links', 'extracts', 'pageviews', 'pageimages'],
+  split = 50
+): Promise<TopicsMetaData> => {
+  if (topics.length === 0) return {};
+  const iterations = Math.ceil(topics.length / split);
+  const metadata: Promise<TopicsMetaData>[] = [];
+  let start = 0
+  for (let i = 0; i < iterations; i++) {
+    const results = _getTopicInfo(topics.slice(start, start + split), props);
+    metadata.push(results);
+    start += split;
+  }
+  return Object.assign({}, ...(await Promise.all(metadata)));
+}
+
+const _getTopicInfo = async (
   topics: string[],
   props = ['links', 'extracts', 'pageviews', 'pageimages']
 ): Promise<TopicsMetaData> => {
@@ -52,7 +67,7 @@ const getTopicInfo = async (
     action: "query",
     format: "json",
     prop: props.join('|'),
-    titles: topics.slice(0, 50).join('|'), // TODO: Allow for more topics
+    titles: topics.join('|'),
     formatversion: "2",
     pllimit: "max",
   };
