@@ -6,8 +6,16 @@ export default defineEventHandler(async (event): Promise<Topic | null> => {
     console.error("Invalid topic!:", topic);
     return null;
   }
-  const topicInfo = (await getTopicInfo([topic], ['links', 'extracts', 'pageimages']))[topic];
-  const subTopicInfo = await getTopicInfo(topicInfo?.links ?? [], ['links', 'extracts', 'pageviews']);
+  const topicInfo = (await getTopicInfo(
+    [topic],
+    ['links', 'extracts', 'pageimages'],
+    { pllimit: 'max' }
+  ))[topic];
+  const subTopicInfo = await getTopicInfo(
+    topicInfo?.links ?? [],
+    ['links', 'extracts', 'pageviews'],
+    { pllimit: 10 }
+  );
   console.log("sub-topics:", Object.keys(subTopicInfo).length);
 
   const possiblePrereqs = filterTopics(subTopicInfo);
@@ -35,9 +43,10 @@ const queryGPT = async (topicsInfo: TopicsMetaData): Promise<string[]> => {
 
 // TODO: Filter to top 100? articles
 const filterTopics = (topicsInfo: TopicsMetaData): TopicsMetaData => {
+  console.log(topicsInfo)
   return Object.fromEntries(Object.entries(topicsInfo).filter(([title, {links, pageviews, description}]) => 
     pageviews && pageviews > 1000
-    // && links && links.length > 5 // TODO: Link retrieval is maxed out ?
+    && links && links.length >= 10
     && description
   ));
 }
@@ -45,6 +54,7 @@ const filterTopics = (topicsInfo: TopicsMetaData): TopicsMetaData => {
 const getTopicInfo = async (
   topics: string[],
   props = ['links', 'extracts', 'pageviews', 'pageimages'],
+  kwparams: Record<string, any> = {},
   split = 50
 ): Promise<TopicsMetaData> => {
   if (topics.length === 0) return {};
@@ -52,7 +62,7 @@ const getTopicInfo = async (
   const metadata: Promise<TopicsMetaData>[] = [];
   let start = 0
   for (let i = 0; i < iterations; i++) {
-    const results = _getTopicInfo(topics.slice(start, start + split), props);
+    const results = _getTopicInfo(topics.slice(start, start + split), props, kwparams);
     metadata.push(results);
     start += split;
   }
@@ -61,7 +71,8 @@ const getTopicInfo = async (
 
 const _getTopicInfo = async (
   topics: string[],
-  props = ['links', 'extracts', 'pageviews', 'pageimages']
+  props = ['links', 'extracts', 'pageviews', 'pageimages'],
+  kwparams: Record<string, any> = {}
 ): Promise<TopicsMetaData> => {
   const params: Record<string, any> = {
     action: "query",
@@ -69,7 +80,7 @@ const _getTopicInfo = async (
     prop: props.join('|'),
     titles: topics.join('|'),
     formatversion: "2",
-    pllimit: "max",
+    ...kwparams,
   };
   if (props.includes('pageimages')) params.pithumbsize = 600
   if (props.includes('extracts')) {
@@ -77,7 +88,7 @@ const _getTopicInfo = async (
     params.explaintext = 1;
     params.exsectionformat = "plain";
   }
-  const [results, status] = await fetchWiki<WikiTopicResponse>(params);
+  const [results, status] = await fetchWiki<WikiTopicResponse>(params, 20); // TODO: Set auto-continue
   if (status !== APIStatus.OKAY) {
     return {};
   }
