@@ -9,23 +9,16 @@ export default defineEventHandler(async (event): Promise<Topic | null> => {
   const topicInfo = (await getTopicInfo(
     [topic],
     ['links', 'extracts', 'pageimages'],
-    { pllimit: 'max' }
+    { pllimit: '100' }
   ))[topic];
-  const subTopicInfo = await getTopicInfo(
-    topicInfo?.links ?? [],
-    ['links', 'extracts', 'pageviews'],
-    { pllimit: 10 }
-  );
-  console.log("sub-topics:", Object.keys(subTopicInfo).length);
-
+  const subTopicInfo = await getTopicInfo(topicInfo?.links ?? [], ['extracts', 'pageviews']);
   const possiblePrereqs = filterTopics(subTopicInfo);
-  console.log("possiblePrereqs:", Object.keys(possiblePrereqs).length);
-
   const prereqTitles = await queryGPT(possiblePrereqs);
-
   const prereqs = Object.fromEntries(Object.entries(possiblePrereqs).filter(
     ([title, info]) => prereqTitles.includes(title)
   ));
+  console.log("sub-topics:", Object.keys(subTopicInfo).length);
+  console.log("possiblePrereqs:", Object.keys(possiblePrereqs).length);
   console.log("prereqs:", Object.keys(prereqs).length);
 
   return {
@@ -42,11 +35,10 @@ const queryGPT = async (topicsInfo: TopicsMetaData): Promise<string[]> => {
 }
 
 // TODO: Filter to top 100? articles
-const filterTopics = (topicsInfo: TopicsMetaData): TopicsMetaData => {
+const filterTopics = (topicsInfo: TopicsMetaData, view_min = 10000): TopicsMetaData => {
   console.log(topicsInfo)
-  return Object.fromEntries(Object.entries(topicsInfo).filter(([title, {links, pageviews, description}]) => 
-    pageviews && pageviews > 1000
-    && links && links.length >= 10
+  return Object.fromEntries(Object.entries(topicsInfo).filter(([title, {pageviews, description}]) => 
+    pageviews && pageviews > view_min
     && description
   ));
 }
@@ -55,14 +47,15 @@ const getTopicInfo = async (
   topics: string[],
   props = ['links', 'extracts', 'pageviews', 'pageimages'],
   kwparams: Record<string, any> = {},
-  split = 50
-): Promise<TopicsMetaData> => {
+  maxContinue = 5, // TODO: Set auto-continue
+  split = 50,
+  ): Promise<TopicsMetaData> => {
   if (topics.length === 0) return {};
   const iterations = Math.ceil(topics.length / split);
   const metadata: Promise<TopicsMetaData>[] = [];
   let start = 0
   for (let i = 0; i < iterations; i++) {
-    const results = _getTopicInfo(topics.slice(start, start + split), props, kwparams);
+    const results = _getTopicInfo(topics.slice(start, start + split), props, kwparams, maxContinue);
     metadata.push(results);
     start += split;
   }
@@ -71,8 +64,9 @@ const getTopicInfo = async (
 
 const _getTopicInfo = async (
   topics: string[],
-  props = ['links', 'extracts', 'pageviews', 'pageimages'],
-  kwparams: Record<string, any> = {}
+  props: string[],
+  kwparams: Record<string, any>,
+  maxContinue: number,
 ): Promise<TopicsMetaData> => {
   const params: Record<string, any> = {
     action: "query",
@@ -88,7 +82,7 @@ const _getTopicInfo = async (
     params.explaintext = 1;
     params.exsectionformat = "plain";
   }
-  const [results, status] = await fetchWiki<WikiTopicResponse>(params, 20); // TODO: Set auto-continue
+  const [results, status] = await fetchWiki<WikiTopicResponse>(params, maxContinue);
   if (status !== APIStatus.OKAY) {
     return {};
   }

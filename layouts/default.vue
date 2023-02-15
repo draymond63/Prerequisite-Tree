@@ -7,6 +7,8 @@
       <SearchBar />
       <div />
     </header>
-    <slot />
+    <div class="px-16 py-2">
+      <slot />
+    </div>
   </div>
 </template>

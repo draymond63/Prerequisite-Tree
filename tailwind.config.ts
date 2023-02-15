@@ -31,12 +31,12 @@ module.exports = {
   plugins: [
     plugin(function({ addBase, theme }: { addBase: (...args: any) => void, theme: (...args: any) => void }) {
       addBase({
-        'h1': { fontSize: theme('fontSize.2xl') },
-        'h2': { fontSize: theme('fontSize.xl') },
-        'h3': { fontSize: theme('fontSize.lg') },
+        'h1': { fontSize: theme('fontSize.5xl') },
+        'h2': { fontSize: theme('fontSize.3xl') },
+        'h3': { fontSize: theme('fontSize.xl') },
         'p': {
-          fontSize: theme('fontSize.sm'),
-          fontWeight: theme('fontWeight.light'),
+          fontSize: theme('fontSize.md'),
+          fontWeight: '100',
         },
       })
     }),
