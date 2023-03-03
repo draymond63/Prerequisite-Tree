@@ -1,4 +1,4 @@
-interface WikiResponse<T> {
+interface WikiResponse<T extends WikiPage = WikiPage> {
   batchcomplete?: boolean;
   limits?: Record<string, number>;
   continue?: {
@@ -12,11 +12,14 @@ interface WikiResponse<T> {
   };
 }
 
-interface WikiSearchResponse {
+interface WikiPage {
   ns: number;
   title: string;
-  index: number;
   pageid: number;
+}
+
+interface WikiSearchResponse extends WikiPage {
+  index: number;
   size: number;
   wordcount: number;
   extract: string;
@@ -29,10 +32,7 @@ interface WikiSearchResponse {
   pageimage: string;
 }
 
-interface WikiTopicResponse {
-  ns: number;
-  pageid: number;
-  title: string;
+interface WikiTopicResponse extends WikiPage {
   timestamp: string;
   extract?: string;
   pageviews?: Record<string, number>;

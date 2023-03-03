@@ -15,7 +15,7 @@
     </div>
     <h2>Prerequisites</h2>
     <div
-      v-for="([prereq, prereqInfo], index) in Object.entries(data?.prereqs)"
+      v-for="([prereq, prereqInfo], index) in Object.entries(data?.prereqs ?? {})"
       :key="prereq"
       class="pb-2"
     >
@@ -33,11 +33,11 @@
 <script lang="ts" setup>
 const route = useRoute()
 const title = route.params.topic
-// const { data } = await useFetch(() => `/api/topic?topic=${title}`);
+const { data } = await useFetch(() => `/api/topic?topic=${title}`);
 const state = reactive({ bookmarked: false });
 
 // console.log(data);
-
+/*
 const data = {
   "title": "Control Systems",
   "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c7/Metabolism.png/600px-Metabolism.png",
@@ -133,4 +133,5 @@ const data = {
       }
   }
 };
+*/
 </script>
