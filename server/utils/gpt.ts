@@ -47,7 +47,7 @@ export const getPrereqsPrompt = (topic: string, options: string[]): string => {
 
 ${options.join('\n')}
 
-The following is a list of the five most relevant prerequisites for "${topic}". All prerequisites are from the list above:
+The following is a list of the five most specific prerequisites for "${topic}". All prerequisites are from the list above and use the exact same format:
 1.`;
 }
 

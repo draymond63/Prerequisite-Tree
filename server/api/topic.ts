@@ -20,10 +20,15 @@ export default defineEventHandler(async (event): Promise<Topic | null> => {
   const bestSubTopics = filterTopics(subTopicInfo);
   const prereqTitles = await getGPTPrereqs(topic, bestSubTopics);
   const prereqs = Object.fromEntries(Object.entries(bestSubTopics).filter(
-    ([title, info]) => prereqTitles.includes(title)
+    ([title, info]) => prereqTitles.some(item => item.toLowerCase() === title.toLowerCase())
   ));
+
+  const numMissing = prereqTitles.length - Object.keys(prereqs).length;
+  if (numMissing) {
+    console.log(`${numMissing} invalid GPT responses for pre-requisites (${prereqTitles})`);
+  }
+
   console.log("Possible Prereqs:", Object.keys(bestSubTopics).length);
-  console.log("GPT's prereqs:", prereqTitles);
   console.log("Final Prereqs:", Object.keys(prereqs).length);
 
   return {
