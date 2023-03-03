@@ -13,6 +13,7 @@
   "dependencies": {
     "@heroicons/vue": "^2.0.16",
     "@nuxtjs/tailwindcss": "^6.4.0",
-    "@tailwindcss/line-clamp": "^0.4.2"
+    "@tailwindcss/line-clamp": "^0.4.2",
+    "openai": "^3.2.1"
   }
 }

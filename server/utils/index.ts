@@ -12,7 +12,6 @@ export const fetchWiki = async <T extends WikiPage>(params: Record<string, any>,
     }
     if (result.continue) {
       wikiParams = Object.assign({}, wikiParams, result.continue);
-      console.log('Continuing with new params:', );
     }
     continue_count -= 1
   } while(continue_count && results[results.length - 1].continue);
@@ -21,7 +20,6 @@ export const fetchWiki = async <T extends WikiPage>(params: Record<string, any>,
 
 // Prevents results from overriding each other
 const _mergeResults = <T extends WikiPage>(responses: WikiResponse<T>[]): [WikiResponse<T>, APIStatus] => {
-  console.log("# of Results:", responses.length);
   const mergedResults: WikiResponse<T> = Object.assign({}, ...responses);
   
   const batch_complete = responses.reduce<boolean>((x, resp) => x || (resp.batchcomplete ?? false), false); 
@@ -56,6 +54,7 @@ const _mergeObjects = <T extends Record<string, any>>(objects: T[]): T => {
 export enum APIStatus {
   OKAY = 0,
   WIKI_FAILURE = 1,
-  UNKNOWN_FAILURE = 2,
-  INCOMPLETE = 3,
+  INVALID_INPUT = 2,
+  UNKNOWN_FAILURE = 3,
+  INCOMPLETE = 4,
 }

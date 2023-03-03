@@ -8,7 +8,7 @@
       </div>
       <p>{{ data?.description }}</p>
       <div class="my-2">
-        <a :href="'https://en.wikipedia.org/wiki/' + data?.title">
+        <a :href="'https://en.wikipedia.org/wiki/' + data?.title" target="_blank">
             Learn more about {{ data?.title }} here.
         </a>
       </div>

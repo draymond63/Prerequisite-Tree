@@ -1,4 +1,5 @@
 import { fetchWiki, APIStatus } from "../utils";
+import { getPrereqsPrompt, queryGPT, parseList } from "../utils/gpt";
 
 export default defineEventHandler(async (event): Promise<Topic | null> => {
   const topic = getQuery(event)['topic'];
@@ -16,13 +17,14 @@ export default defineEventHandler(async (event): Promise<Topic | null> => {
     console.log("Getting sub-topic info");
   const subTopicInfo = await getTopicInfo(topicInfo?.links ?? [], ['extracts', 'pageviews']);
   console.log("Article Sub-topics:", Object.keys(subTopicInfo).length);
-  const possiblePrereqs = filterTopics(subTopicInfo);
-  const prereqTitles = await queryGPT(possiblePrereqs);
-  const prereqs = Object.fromEntries(Object.entries(possiblePrereqs).filter(
+  const bestSubTopics = filterTopics(subTopicInfo);
+  const prereqTitles = await getGPTPrereqs(topic, bestSubTopics);
+  const prereqs = Object.fromEntries(Object.entries(bestSubTopics).filter(
     ([title, info]) => prereqTitles.includes(title)
   ));
-  console.log("Possible Prereqs:", Object.keys(possiblePrereqs).length);
-  console.log("GPT Prereqs:", Object.keys(prereqs).length);
+  console.log("Possible Prereqs:", Object.keys(bestSubTopics).length);
+  console.log("GPT's prereqs:", prereqTitles);
+  console.log("Final Prereqs:", Object.keys(prereqs).length);
 
   return {
     title: topic,
@@ -33,8 +35,15 @@ export default defineEventHandler(async (event): Promise<Topic | null> => {
 });
 
 // TODO: Get GPT response
-const queryGPT = async (topicsInfo: TopicsMetaData): Promise<string[]> => {
-  return Object.keys(topicsInfo);
+const getGPTPrereqs = async (topic: string, topicsInfo: TopicsMetaData): Promise<string[]> => {
+  const articles = Object.keys(topicsInfo);
+  const prompt = getPrereqsPrompt(topic, articles);
+  const [response, status] = await queryGPT(prompt);
+  if (![APIStatus.OKAY].includes(status)) {
+    console.log("Error with GPT API");
+    return [];
+  }
+  return parseList(response);
 }
 
 const filterTopics = (topicsInfo: TopicsMetaData, view_min = 5000, max = 100): TopicsMetaData => {
