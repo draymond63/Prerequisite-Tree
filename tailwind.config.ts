@@ -44,6 +44,7 @@ module.exports = {
         },
         h3: {
           fontSize: theme('fontSize.xl'),
+          fontWeight: 'font-semibold',
           letterSpacing: 'tracking-tight',
         },
         p: {

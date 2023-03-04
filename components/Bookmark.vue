@@ -1,7 +1,10 @@
 <template>
-  <button @click="emit('update:status', !status)">
-    <BookmarkIconSolid v-if="status" class="text-accent-2-dark" />
-    <BookmarkIconOutline v-else class="text-accent-2-dark" />
+  <button
+    @click="emit('update:status', !status)"
+    class="text-accent-2-dark"
+  >
+    <BookmarkIconSolid v-if="status" />
+    <BookmarkIconOutline v-else />
   </button>
 </template>
 
@@ -13,3 +16,9 @@ import { BookmarkIcon as BookmarkIconOutline } from '@heroicons/vue/24/outline'
 const { status } = defineProps(['status'])
 const emit = defineEmits(['update:status'])
 </script>
+
+<style>
+svg path {
+  stroke-width: 2.5;
+}
+</style>
