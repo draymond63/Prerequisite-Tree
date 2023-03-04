@@ -3,8 +3,8 @@
     <div class="pb-2">
       <img :src="data?.image || 'https://picsum.photos/seed/picsum/600/400'" :alt="data?.title" class="float-right max-w-lg mx-2" />
       <div class="flex items-center space-x-4">
-          <h1 class="my-4 font-semibold leading-none">{{ data?.title }}</h1>
-          <Bookmark class="w-10 aspect-square" v-model:status="state.bookmarked" />
+          <h1 class="my-4 leading-none">{{ data?.title }}</h1>
+          <Bookmark class="w-10 aspect-square" :status="state.bookmarked" @update:status="setBookMark" />
       </div>
       <p>{{ data?.description }}</p>
       <div class="my-2">
@@ -33,9 +33,16 @@
 <script lang="ts" setup>
 const route = useRoute()
 const title = route.params.topic
+if (Array.isArray(title)) {
+  console.error("Title was an array:", title);
+}
 // const { data } = await useFetch(() => `/api/topic?topic=${title}`);
+const { $Gun } = useNuxtApp();
+const gunMark = $Gun().get('user').get(Array.isArray(title) ? title[0] : title);
 const state = reactive({ bookmarked: false });
 
+const setBookMark = (status: boolean) => gunMark.put(status);
+gunMark.on((status: boolean) => state.bookmarked = status);
 // console.log(data);
 
 // /*
