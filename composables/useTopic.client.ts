@@ -17,13 +17,11 @@ export const useTopic = (title: string, overwrite=false) => {
 
   topic.once(async node => {
     // ! Putting the fetch in the top-level of the composable throws warning
-    const req = useFetch(() => `/api/topic`, { body: title, method: 'POST' });
-    req.then(({ data }) => {
-      if (data.value && data.value[title]) {
-        state.description = data.value[title].description;
-        state.image = data.value[title].image || 'https://picsum.photos/seed/picsum/600/400';
-      }
-    });
+    const { data } = await useFetch(() => `/api/topic`, { body: title, method: 'POST' });
+    if (data.value && data.value[title]) {
+      state.description = data.value[title].description;
+      state.image = data.value[title].image || 'https://picsum.photos/seed/picsum/600/400';
+    }
   });
   topic.get('prereqs').once(a => {});
 

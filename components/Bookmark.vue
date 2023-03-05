@@ -17,6 +17,7 @@ import { BookmarkIcon as BookmarkIconSolid } from '@heroicons/vue/24/solid'
 import { BookmarkIcon as BookmarkIconOutline } from '@heroicons/vue/24/outline'
 
 const { title } = defineProps<{title: string}>();
+if (title.length === 0) throw Error("Bookmark received an empty title");
 const { state, update } = useBookmark(title);
 </script>
 

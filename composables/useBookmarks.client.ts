@@ -4,7 +4,8 @@ export const useBookmarks = () => {
 
   const state = reactive({ bookmarks: new Set<string>() });
 
-  bookmarks.map().on((status, title) => {
+  // Don't listen changes, only retrieve on startup
+  bookmarks.map().once((status, title) => {
     if (typeof status == 'boolean' && status)
       state.bookmarks.add(title);
     else

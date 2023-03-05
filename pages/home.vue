@@ -1,15 +1,12 @@
 <template>
-  <div>
+  <h1>Bookmarks</h1>
+  <ul class="flex flex-col items-center px-8">
     <client-only>
-    <p v-for="(topic, index) in state.bookmarks">
-      <TopicEntry :topic="{
-        title: topic, 
-        description: '',
-        image: '',
-      }" />
-    </p>
+      <p v-for="title in state.bookmarks.values()">
+        <TopicEntry :topic="title" />
+      </p>
     </client-only>
-  </div>
+  </ul>
 </template>
 
 <script lang="ts" setup>
