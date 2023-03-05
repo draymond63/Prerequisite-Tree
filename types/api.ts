@@ -10,7 +10,6 @@ interface Topic {
   title: string;
   description: string;
   image: string;
-  prereqs: TopicsMetaData;
 }
 
 interface TopicMetaData {
@@ -20,4 +19,5 @@ interface TopicMetaData {
   image?: string;
 }
 
+type Topics = Record<string, Topic>;
 type TopicsMetaData = Record<string, TopicMetaData>;

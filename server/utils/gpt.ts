@@ -40,17 +40,6 @@ export const queryGPT = async (prompt: string): Promise<[string, APIStatus]> => 
   }
 }
 
-// TODO: Make prompt
-export const getPrereqsPrompt = (topic: string, options: string[]): string => {
-  console.log(options);
-  return `The following is a list of topics related to "${topic}". 
-
-${options.join('\n')}
-
-The following is a list of the five most specific prerequisites for "${topic}". All prerequisites are from the list above and use the exact same format:
-1.`;
-}
-
 export const parseList = (response: string): string[] => {
   const lines = response.split(/\n/);
   return lines.map(line => {
