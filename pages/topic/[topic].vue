@@ -1,10 +1,10 @@
 <template>
   <div>
     <div class="pb-2">
-      <img :src="topic?.image" :alt="topic?.title" class="float-right max-w-lg mx-2" />
+      <img :src="topic?.image" :alt="title" class="float-right max-w-lg mx-2" />
       <div class="flex items-center space-x-4">
-          <h1 class="my-4 leading-none">{{ topic?.title }}</h1>
-          <Bookmark class="w-10 aspect-square" :status="topic.bookmarked" @update:status="topic.updateBookmark" />
+        <h1 class="my-4 leading-none">{{ title }}</h1>
+        <Bookmark class="w-10 h-10" :topic="title" />
       </div>
       <p>{{ topic?.description }}</p>
       <div class="my-2">
@@ -23,7 +23,7 @@
         <NuxtLink :to="'/topic/' + prereq" class="text-inherit">
           <h3>{{ index + 1 }}. {{ prereq }}</h3>
         </NuxtLink>
-        <Bookmark class="w-6 h-6" />
+        <Bookmark class="w-6 h-6" :topic="prereq" />
       </div>
       <p class="line-clamp-4">{{ prereqInfo.description }}</p>
     </div>
@@ -32,9 +32,10 @@
 
 <script lang="ts" setup>
 const route = useRoute()
-const title = route.params.topic
-if (Array.isArray(title)) {
-  console.error("Title was an array:", title);
+const param = route.params.topic
+if (Array.isArray(param)) {
+  console.error("Title was an array:", param);
 }
-const topic = useTopic(Array.isArray(title) ? title[0] : title, true);
+const title = Array.isArray(param) ? param[0] : param;
+const topic = useTopic(title, true);
 </script>

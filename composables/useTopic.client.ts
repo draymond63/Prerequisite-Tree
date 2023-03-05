@@ -1,14 +1,10 @@
 type UserTopic = Topic & {
-  bookmarked: boolean;
-  updateBookmark: (status: boolean) => void;
   prereqs: Topics;
 }
 
-// TODO: Add optional pre-req retrieval
 export const useTopic = (title: string, overwrite=false) => {
   const { $Gun } = useNuxtApp();
   const topic = $Gun.get(title);
-  const bookmark = $Gun.get('user').get('bookmarks').get(title);
   const topics = $Gun.get('topics');
   topics.set(topic); // Add to the global list of all topics
 
@@ -17,8 +13,6 @@ export const useTopic = (title: string, overwrite=false) => {
     description: "Loading...",
     image: "",
     prereqs: {},
-    bookmarked: false,
-    updateBookmark: (status: boolean) => bookmark.put(status)
   } as UserTopic);
 
   topic.once(async node => {
@@ -53,15 +47,6 @@ export const useTopic = (title: string, overwrite=false) => {
   //     }
   //   }
   // });
-
-  bookmark.once((status: boolean) => {
-    state.bookmarked = status;
-  });
-
-  // TODO: Initial render not working
-  bookmark.on((status: boolean) => {
-    state.bookmarked = status;
-  });
   return state
 }
 

@@ -1,10 +1,13 @@
 <template>
   <button
-    @click="emit('update:status', !status)"
+    @click="() => update(!state.bookmarked)"
     class="text-accent-2-dark"
   >
-    <BookmarkIconSolid v-if="status" />
-    <BookmarkIconOutline v-else />
+    <!-- TODO: Fix hydration issue -->
+    <client-only placeholder="">
+      <BookmarkIconSolid v-if="state.bookmarked" />
+      <BookmarkIconOutline v-else />
+    </client-only>
   </button>
 </template>
 
@@ -13,8 +16,8 @@
 import { BookmarkIcon as BookmarkIconSolid } from '@heroicons/vue/24/solid'
 import { BookmarkIcon as BookmarkIconOutline } from '@heroicons/vue/24/outline'
 
-const { status } = defineProps(['status'])
-const emit = defineEmits(['update:status'])
+const { topic } = defineProps<{topic: string}>();
+const { state, update } = useBookmark(topic);
 </script>
 
 <style>

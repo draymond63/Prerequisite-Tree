@@ -11,7 +11,7 @@
           <Bookmark
             @click="$event.stopPropagation()"
             class="w-8 aspect-square float-right mt-2"
-            v-model:status="state.bookmarked"
+            :topic="article.title"
           />
           <h3>{{ article.title }}</h3>
           <p class="line-clamp-4" v-html="article.extract" />
@@ -24,5 +24,4 @@
 <script lang="ts" setup>
 defineProps<{article: Article}>();
 const router = useRouter();
-const state = reactive({ bookmarked: false });
 </script>
