@@ -16,8 +16,8 @@
 import { BookmarkIcon as BookmarkIconSolid } from '@heroicons/vue/24/solid'
 import { BookmarkIcon as BookmarkIconOutline } from '@heroicons/vue/24/outline'
 
-const { topic } = defineProps<{topic: string}>();
-const { state, update } = useBookmark(topic);
+const { title } = defineProps<{title: string}>();
+const { state, update } = useBookmark(title);
 </script>
 
 <style>

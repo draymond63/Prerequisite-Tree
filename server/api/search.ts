@@ -1,6 +1,6 @@
 import { fetchWiki, APIStatus } from "../utils";
 
-export default defineEventHandler(async (event): Promise<Article[]> => {
+export default defineEventHandler(async (event): Promise<Topic[]> => {
   const query = getQuery(event)['q'];
   if (query === null || query === undefined || query === "" || typeof(query) !== "string") {
     console.error("Invalid query:", query);
@@ -8,10 +8,10 @@ export default defineEventHandler(async (event): Promise<Article[]> => {
   }
   let articles = await searchArticles(query);
   // TODO: Filter results by views, number of links, etc.
-  return articles.filter((article) => article.wordcount > 3000);
+  return articles.filter((article) => article.wordcount ?? 0 > 3000);
 });
 
-const searchArticles = async (query: string): Promise<Article[]> => {
+const searchArticles = async (query: string): Promise<Topic[]> => {
   const params = {
     "action": "query",
     "format": "json",
@@ -36,7 +36,7 @@ const searchArticles = async (query: string): Promise<Article[]> => {
     id: page.pageid,
     wordcount: page.wordcount,
     title: page.title,
-    extract: page.extract,
+    description: page.extract,
     image: page.thumbnail?.source,
   }));
 }

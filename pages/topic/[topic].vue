@@ -4,7 +4,7 @@
       <img :src="topic?.image" :alt="title" class="float-right max-w-lg mx-2" />
       <div class="flex items-center space-x-4">
         <h1 class="my-4 leading-none">{{ title }}</h1>
-        <Bookmark class="w-10 h-10" :topic="title" />
+        <Bookmark class="w-10 h-10" :title="title" />
       </div>
       <p>{{ topic?.description }}</p>
       <div class="my-2">
@@ -23,7 +23,7 @@
         <NuxtLink :to="'/topic/' + prereq" class="text-inherit">
           <h3>{{ index + 1 }}. {{ prereq }}</h3>
         </NuxtLink>
-        <Bookmark class="w-6 h-6" :topic="prereq" />
+        <Bookmark class="w-6 h-6" :title="prereq" />
       </div>
       <p class="line-clamp-4">{{ prereqInfo.description }}</p>
     </div>
@@ -37,5 +37,5 @@ if (Array.isArray(param)) {
   console.error("Title was an array:", param);
 }
 const title = Array.isArray(param) ? param[0] : param;
-const topic = useTopic(title, true);
+const topic = useTopic(title);
 </script>
