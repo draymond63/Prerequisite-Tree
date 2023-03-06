@@ -1,16 +1,17 @@
 <template>
-  <div>
-    <div class="pb-2">
-      <img :src="topic?.image" :alt="title" class="float-right max-w-lg mx-2" />
+  <div class="mt-2 md:mt-4 space-y-2">
+    <div>
+      <img :src="topic?.image" :alt="title" class="max-sm:hidden float-right max-w-lg mx-2" />
       <div class="flex items-center space-x-4">
-        <h1 class="my-4 leading-none">{{ title }}</h1>
-        <Bookmark class="w-10 h-10" :title="title" />
+        <h1 class="leading-none">{{ title }}</h1>
+        <Bookmark class="max-md:hidden w-10 h-10" :title="title" />
       </div>
-      <p>{{ topic?.description }}</p>
-      <div class="my-2">
+      <p class="max-sm:line-clamp-6">{{ topic?.description }}</p>
+      <div class="flex my-2">
         <a :href="'https://en.wikipedia.org/wiki/' + topic?.title" target="_blank">
             Learn more about {{ topic?.title }} here.
         </a>
+        <Bookmark class="md:hidden w-10 h-10" :title="title" />
       </div>
     </div>
     <h2>Prerequisites</h2>

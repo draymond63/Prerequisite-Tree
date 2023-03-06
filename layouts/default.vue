@@ -7,7 +7,7 @@
       <SearchBar />
       <div />
     </header>
-    <div class="relative px-16 py-2">
+    <div class="relative px-6 md:px-16 py-2">
       <slot />
     </div>
   </div>

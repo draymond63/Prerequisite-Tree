@@ -1,10 +1,8 @@
 <template>
   <h1>Bookmarks</h1>
-  <ul class="flex flex-col items-center px-8">
+  <ul class="flex flex-col items-center space-y-2">
     <client-only>
-      <p v-for="title in state.bookmarks.values()">
-        <TopicEntry :topic="title" />
-      </p>
+      <TopicEntry v-for="title in state.bookmarks.values()" :topic="title"/>
     </client-only>
   </ul>
 </template>

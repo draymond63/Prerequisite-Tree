@@ -1,13 +1,17 @@
 <template>
-  <li class="w-full max-w-3xl p-2">
+  <li class="w-full max-w-3xl">
     <button @click="router.push('/topic/' + title)">
-      <div class="w-full flex space-x-2">
+      <div class="
+        w-full flex space-x-2 overflow-hidden shadow-black
+        flex-col       rounded-lg      drop-shadow-lg      bg-white
+        md:flex-row md:rounded-none md:drop-shadow-none md:bg-transparent
+      ">
         <img
-          class="h-36 aspect-square object-cover m-1 border-secondary border-8"
+          class="h-24 md:h-36 aspect-square object-cover md:m-1 md:border-8 border-secondary"
           :src="image ?? 'https://picsum.photos/seed/picsum/600/400'"
           :alt="title" 
         />
-        <div class="h-min px-4 py-2 bg-white rounded-md drop-shadow-lg shadow-black text-left">
+        <div class="h-min px-4 py-2 md:bg-white md:rounded-md md:drop-shadow-lg shadow-black text-left">
           <client-only>
           <Bookmark
             @click="$event.stopPropagation()"
@@ -16,7 +20,7 @@
           />
           </client-only>
           <h3>{{ title }}</h3>
-          <p class="line-clamp-4" v-html="description" />
+          <p class="line-clamp-3 md:line-clamp-4" v-html="description" />
         </div>
       </div>
     </button>

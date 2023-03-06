@@ -23,7 +23,7 @@ export const useTopic = (title: string, overwrite=false) => {
       state.image = data.value[title].image || 'https://picsum.photos/seed/picsum/600/400';
     }
   });
-  topic.get('prereqs').once(a => {});
+  topic.get('prereqs').once(a => {}); // TODO: Why tf is this needed?
 
   topic.get('prereqs').once(async (node) => {
     let prereqs = Object.keys(getNodeData(node));
@@ -37,7 +37,7 @@ export const useTopic = (title: string, overwrite=false) => {
       };
       console.log("New prereqs:", prereqs);
     }
-    if (prereqs.length) {
+    if (prereqs.length && prereqs.length !== Object.keys(state.prereqs).length) {
       const { data: prereqInfo } = await useFetch(() => `/api/topic`, { body: prereqs, method: 'POST' });
       if (prereqInfo.value)
         state.prereqs = prereqInfo.value;
