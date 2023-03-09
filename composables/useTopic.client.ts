@@ -1,5 +1,5 @@
 type UserTopic = Topic & {
-  prereqs: Topics;
+  prereqs?: Topics;
 }
 
 export const useTopic = (title: string, overwrite=false) => {
@@ -12,7 +12,6 @@ export const useTopic = (title: string, overwrite=false) => {
     title,
     description: "Loading...", // TODO: Better loading visual
     image: "",
-    prereqs: {},
   });
 
   topic.once(async node => {
@@ -37,7 +36,7 @@ export const useTopic = (title: string, overwrite=false) => {
       };
       console.log("New prereqs:", prereqs);
     }
-    if (prereqs.length && prereqs.length !== Object.keys(state.prereqs).length) {
+    if (prereqs.length && prereqs.length !== Object.keys(state.prereqs ?? {}).length) {
       const { data: prereqInfo } = await useFetch(() => `/api/topic`, { body: prereqs, method: 'POST' });
       if (prereqInfo.value)
         state.prereqs = prereqInfo.value;

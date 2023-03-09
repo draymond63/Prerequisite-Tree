@@ -16,6 +16,7 @@
     </div>
     <h2>Prerequisites</h2>
     <div
+      v-if="topic?.prereqs != undefined"
       v-for="([prereq, prereqInfo], index) in Object.entries(topic?.prereqs ?? {})"
       :key="prereq"
       class="pb-2"
@@ -28,6 +29,9 @@
       </div>
       <p class="line-clamp-4">{{ prereqInfo.description }}</p>
     </div>
+    <b v-else>
+      Loading prerequisites...
+    </b>
   </div>
 </template>
 

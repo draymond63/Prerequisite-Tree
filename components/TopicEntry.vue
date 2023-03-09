@@ -32,7 +32,7 @@ const router = useRouter();
 const { topic: param } = defineProps<{topic: Topic | string}>();
 
 const getTopicInfo = async (title: string): Promise<Topic> => {
-  const { data } = await useFetch(() => `/api/topic`, { body: [title], method: 'POST' });
+  const { data } = await useFetch(() => `/api/topic`, { body: title, method: 'POST' });
   return data.value && data.value[title] ? data.value[title] : {
     title,
     description: 'An error occured retrieving information about this topic :(',
