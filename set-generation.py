@@ -35,12 +35,25 @@ namespaces = {
 def split_category(pages: pd.Series) -> pd.DataFrame:
     df = pages.str.split(':', n=1, expand=True)
     df.dropna(inplace=True)
-    df.columns = ['category', 'page_title']
+    df.columns = ['category', 'title']
+    df = pd.concat([df['category'], pages], axis='columns')
     return df
 
+# TODO: Switch to regex filtering
+def drop_redundant(pages: pd.Series) -> pd.Series:
+    def keep_page(page: str) -> bool:
+        return not 'all_books' in page
+    return pages[pages.apply(keep_page)]
+
 def get_category(pages: pd.Series, category: str) -> pd.Series:
-    df = split_category(pages)
+    filtered_pages = drop_redundant(pages)
+    df = split_category(filtered_pages)
     return df[df['category'] == category]['page_title']
+
+# def drop_structural_articles(articles: pd.Series, sets: pd.Series) -> pd.Series:
+#     article_set = set(articles.unique())
+#     droppables = set(sets.unique())
+#     return pd.Series(article_set - droppables)
 
 def generate_sets(source_path: str, save_dir='./datasets'):
     df = pd.read_csv(source_path, sep='\t')
