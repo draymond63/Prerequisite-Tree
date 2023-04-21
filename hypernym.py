@@ -15,3 +15,18 @@ for item, definition in sections.items():
         print(token.text, token.lemma_, token.pos_, token.tag_, token.dep_,
                 token.shape_, token.is_alpha, token.is_stop)
     spacy.displacy.serve(document, style="dep")
+
+# for chunk in document.noun_chunks:
+#     print(chunk)
+
+# for token in document:
+# 	print(
+# 		f"""
+# TOKEN: {token.text}
+# =====
+# {token.tag_ = }
+# {token.head.text = }
+# {token.dep_ = }"""
+# 	)
+
+# displacy.serve(document, style="dep")

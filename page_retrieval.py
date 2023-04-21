@@ -39,37 +39,19 @@ class PageRetriever:
 		if pages is None and regex is None:
 			return True
 		elif regex:
+			assert pages is None, "Cannot give Regex and page list to the PageRetriever"
 			return bool(re.search(regex, page_urend))
 		else:
 			return page_urend in pages
-	
+
 	def get_article_text(self, page_title: str) -> str:
 		title, page_id, text = next(self.get([page_title]))
 		return text
-	
+
 	@staticmethod
 	def remove_wiki_links(text: str) -> str:
 		unlinked_text = re.sub(r'\[\[.*?\|([^\]]+)\]\]', r'\1', text)
-		return re.sub(r'\[\[.*\]\]', '', unlinked_text)
-
-# TODO: Clean text
-def parse_sections(text: str) -> Dict[str, str]:
-	text_lines = text.split('\n')
-	sections = {}
-	current_section = None
-	section_start_index = None
-	for current_index, line in enumerate(text_lines):
-		cleaned_line = line.strip()
-		if cleaned_line.startswith('='):
-			if current_section:
-				paragraph = '\n'.join(text_lines[section_start_index:current_index])
-				sections[current_section] = paragraph.strip()
-			current_section = cleaned_line.strip('=').strip()
-			section_start_index = current_index + 1
-	if current_section not in sections:
-		paragraph = '\n'.join(text_lines[section_start_index:])
-		sections[current_section] = paragraph.strip()	
-	return sections
+		return re.sub(r'\[\[.*\]\]', '', unlinked_text)	
 
 if __name__ == '__main__':
 	# pages = pd.read_csv('datasets/departments.tsv', sep='\t').values.flatten().tolist()
