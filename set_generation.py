@@ -50,10 +50,8 @@ def get_category(pages: pd.Series, category: str) -> pd.Series:
     df = split_category(filtered_pages)
     return df[df['category'] == category]['page_title']
 
-# def drop_structural_articles(articles: pd.Series, sets: pd.Series) -> pd.Series:
-#     article_set = set(articles.unique())
-#     droppables = set(sets.unique())
-#     return pd.Series(article_set - droppables)
+def get_glossaries(pages: pd.Series) -> pd.Series:
+    return pages[pages.str.endswith('/Glossary')]
 
 def generate_sets(source_path: str, save_dir='./datasets'):
     df = pd.read_csv(source_path, sep='\t')
@@ -61,10 +59,12 @@ def generate_sets(source_path: str, save_dir='./datasets'):
     df.dropna(inplace=True)
     articles = df[df['page_namespace'] == 'Article']['page_title']
     categories = df[df['page_namespace'] == 'Category']['page_title']
+    glossaries = get_glossaries(articles)
     books = get_category(categories, 'Book')
     shelfs = get_category(categories, 'Shelf') # TODO: Determine difference between <shelf> & <shelf>/all_books
     departments = get_category(categories, 'Department') # TODO: Determine difference between <dep> & <dep>/all_books
     # TODO: Split page path on '/' ?
+    glossaries.to_csv(f'{save_dir}/glossaries.tsv', sep='\t', index=False)
     articles.to_csv(f'{save_dir}/articles.tsv', sep='\t', index=False)
     books.to_csv(f'{save_dir}/books.tsv', sep='\t', index=False)
     shelfs.to_csv(f'{save_dir}/shelfs.tsv', sep='\t', index=False)
