@@ -24,42 +24,48 @@ class ArticleSection:
     def __init__(self, header: str, content: List[str], depth: int = 0) -> None:
         self.header = header
         self.depth = depth
-        self.content = self.parse_preamble(content)
+        self.content = self._parse_preamble(content)
         self.children = self.parse_section(content)
 
-    def parse_preamble(self, text: List[str]) -> str:
+    def _parse_preamble(self, text: List[str]) -> str:
         preamble = text
         header_index = self._find_header(text)
         if header_index != -1:
             preamble = text[:header_index]
-        return '\n'.join(preamble)
+        return self.clean_content('\n'.join(preamble))
+
+    @staticmethod
+    def clean_content(text: str) -> str:
+        return text.replace("'''", '')
 
     def parse_section(self, text: List[str]) -> 'List[ArticleSection]':
-        # Find subsections
-        subsection_indices = []
-        new_depth = self.depth + 1
-        for index, line in enumerate(text):
-            cleaned_line = line.strip()
-            if cleaned_line[:new_depth] == '=' * new_depth and cleaned_line[new_depth] != '=':
-                subsection_indices.append(index)
-
+        subsection_indices = self._find_subsections(text)
         # If there are no subsections, return the content. If there are deeper subsections, go deeper
         if not len(subsection_indices):
             if self._find_header(text) == -1:
                 return []
-            return [ArticleSection(self.header, text, new_depth)]
+            return [ArticleSection(self.header, text, self.depth + 1)]
+        content = self._parse_subsections(text, subsection_indices)
+        return content
 
-        # Parse subections
+    def _find_subsections(self, text):
+        new_depth = self.depth + 1
+        subsection_indices = []
+        for index, line in enumerate(text):
+            cleaned_line = line.strip()
+            if cleaned_line[:new_depth] == '=' * new_depth and cleaned_line[new_depth] != '=':
+                subsection_indices.append(index)
+        return subsection_indices
+
+    def _parse_subsections(self, text, subsection_indices):
         content = []
         subsection_indices.append(len(text))
         for subsection_start, subsection_end in zip(subsection_indices[:-1], subsection_indices[1:]):
             header = text[subsection_start].strip('=').strip()
             subection_content = text[subsection_start + 1: subsection_end]
-            content.append(ArticleSection(header, subection_content, new_depth))
-
-        # TODO: Add content that is not in a subsection
+            content.append(ArticleSection(header, subection_content, self.depth + 1))
         return content
-    
+
     @staticmethod
     def _find_header(text: List[str]) -> int:
         for index, line in enumerate(text):
