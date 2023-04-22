@@ -1,5 +1,5 @@
 import re
-from typing import List, Tuple
+from typing import List, Optional
 
 
 class Article:
@@ -9,8 +9,10 @@ class Article:
         self.path = self.parse_path(path)
         self.sections = ArticleSection(title, text)
     
-    def parse_path(self, text: str):
-        return re.search(r'\{\{([^\]]+)\}\}', text).group(1).strip('*').strip()
+    def parse_path(self, text: str) -> Optional[str]:
+        matched_path = re.search(r'\{\{([^\]]+)\}\}', text)
+        if matched_path:
+            return matched_path.group(1).strip('*').strip()
 
 
 class ArticleSection:
@@ -70,7 +72,7 @@ class ArticleSection:
         yield self.header, self.content, self.depth
         for section in self.children:
             for header, content, depth in section:
-                complete_header = f'{self.header}/{header}'
+                complete_header = f'{self.header}/{header}' if not self.header in header else header
                 yield complete_header, content, depth
 
     def get_content(self) -> str:

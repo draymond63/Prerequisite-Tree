@@ -12,6 +12,8 @@ class PageRetriever:
 	
 	# TODO: Add progress bar
 	def get(self, page_titles: Optional[List[str]] = None, regex: Optional[str] = None, pbar=False):
+		if page_titles:
+			page_titles = [title.replace('_', ' ') for title in page_titles]
 		root = iterparse(self.file_path)
 		page_count = 0
 		page_active, page_title, page_id, page_text = False, '', '', ''
@@ -24,25 +26,23 @@ class PageRetriever:
 				page_title = element.text
 			elif 'id' in element.tag:
 				page_id = element.text
-			elif 'text' in element.tag:
+			elif 'text' in element.tag and page_active and self.is_valid_title(page_title, page_titles, regex):
+				page_count += 1
 				page_text = self.remove_wiki_links(element.text) if element.text else ''
-				if page_active and self.is_valid_title(page_title, page_titles, regex):
-					page_count += 1
-					yield page_title, page_id, page_text
+				yield page_title, page_id, page_text
 			if page_titles is not None and page_count >= len(page_titles):
 				break
 
 	def is_valid_title(self, page_title, pages: Optional[List[str]] = None, regex: Optional[str] = None) -> bool:
-		page_urend = page_title.replace(' ', '_') # Works for all but 11 (useless) article titles
 		if self.show_warnings and 'REDIRECT' in page_title:
 			print(f'WARNING: {page_title} is a redirect')
 		if pages is None and regex is None:
 			return True
 		elif regex:
 			assert pages is None, "Cannot give Regex and page list to the PageRetriever"
-			return bool(re.search(regex, page_urend))
+			return bool(re.search(regex, page_title))
 		else:
-			return page_urend in pages
+			return page_title in pages
 
 	def get_article_text(self, page_title: str) -> str:
 		title, page_id, text = next(self.get([page_title]))
