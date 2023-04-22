@@ -5,7 +5,8 @@ from typing import List, Tuple
 class Article:
     def __init__(self, title: str, content: str) -> None:
         text = content.split('\n')
-        self.path = self.parse_path(text[0])
+        path, text = text[0], text[1:]
+        self.path = self.parse_path(path)
         self.sections = ArticleSection(title, text)
     
     def parse_path(self, text: str):
@@ -13,14 +14,25 @@ class Article:
 
 
 class ArticleSection:
-    content: 'str | List[ArticleSection]' # TODO: Convert to 'List[str | ArticleSection]'
+    header: str
+    depth: int
+    content: str
+    children: 'List[ArticleSection]'
 
     def __init__(self, header: str, content: List[str], depth: int = 0) -> None:
         self.header = header
         self.depth = depth
-        self.content = self.parse_section(content)
+        self.content = self.parse_preamble(content)
+        self.children = self.parse_section(content)
 
-    def parse_section(self, text: List[str]) -> 'str | List[ArticleSection]':
+    def parse_preamble(self, text: List[str]) -> str:
+        preamble = text
+        header_index = self._find_header(text)
+        if header_index != -1:
+            preamble = text[:header_index]
+        return '\n'.join(preamble)
+
+    def parse_section(self, text: List[str]) -> 'List[ArticleSection]':
         # Find subsections
         subsection_indices = []
         new_depth = self.depth + 1
@@ -29,10 +41,10 @@ class ArticleSection:
             if cleaned_line[:new_depth] == '=' * new_depth and cleaned_line[new_depth] != '=':
                 subsection_indices.append(index)
 
-        # If there are no subsections, return the content
+        # If there are no subsections, return the content. If there are deeper subsections, go deeper
         if not len(subsection_indices):
-            if not self.contains_headers(text):
-                return '\n'.join(text).strip()
+            if self._find_header(text) == -1:
+                return []
             return [ArticleSection(self.header, text, new_depth)]
 
         # Parse subections
@@ -47,29 +59,25 @@ class ArticleSection:
         return content
     
     @staticmethod
-    def contains_headers(text: List[str]) -> bool:
-        for line in text:
+    def _find_header(text: List[str]) -> int:
+        for index, line in enumerate(text):
             cleaned_line = line.strip()
             if cleaned_line and cleaned_line[0] == '=':
-                return True
-        return False
+                return index
+        return -1
 
     def __iter__(self):
-        if isinstance(self.content, str):
-            yield self.header, self.content
-        else:
-            for section in self.content:
-                for header, content in section:
-                    complete_header = f'{self.header}/{header}'
-                    yield complete_header, content
+        yield self.header, self.content, self.depth
+        for section in self.children:
+            for header, content, depth in section:
+                complete_header = f'{self.header}/{header}'
+                yield complete_header, content, depth
 
     def get_content(self) -> str:
-        output = f'{"=" * self.depth} {self.header} {"=" * self.depth}\n'
-        if isinstance(self.content, str):
-            output += self.content + '\n'
-        else:
-            for sections in self.content:
-                output += sections.get_content()
+        output = f'\n{"=" * self.depth} {self.header} {"=" * self.depth}'
+        output += self.content
+        for sections in self.children:
+            output += sections.get_content()
         return output
 
     def __str__(self) -> str:
@@ -77,11 +85,11 @@ class ArticleSection:
 
 
 if __name__ == '__main__':
-    title = 'Article'
+    title = 'Control Systems'
     text = open('datasets/scratch/article_example.md').read()
     article = Article(title, text)
-    # print(article.sections.get_content())
-    # titles = str(article.sections)
-    # open('test.txt', 'w').write(titles)
+    content = article.sections.get_content()
+    open('test.txt', 'w').write(content)
 
-    print([section for section in article.sections])
+    for header, content, depth in article.sections:
+        print(header, depth)
