@@ -4,20 +4,26 @@ from typing import List, Optional
 
 class Article:
     def __init__(self, title: str, content: str) -> None:
-        text = content.split('\n')
+        text = self.clean_content(content).split('\n')
         self.title = title
         path, text = text[0], text[1:]
         self.path = self.parse_path(path)
         self.sections = ArticleSection(title, text)
-    
+
+    @staticmethod
+    def clean_content(text: str) -> str:
+        cleaned_text = text.replace("'''", '')
+        cleaned_text = re.sub(r';([^:]+):', r'====\1====\n', cleaned_text)
+        return cleaned_text.strip()
+
     def parse_path(self, text: str) -> Optional[str]:
         matched_path = re.search(r'\{\{([^\]]+)\}\}', text)
         if matched_path:
             return matched_path.group(1).strip('*').strip()
-        
+
     def get_section(self, header_path: List[str]) -> str:
         return self.sections.get_section([self.title, *header_path])
-    
+
     def get_content(self) -> str:
         return self.sections.get_content()
 
@@ -39,13 +45,7 @@ class ArticleSection:
         header_index = self._find_header(text)
         if header_index != -1:
             preamble = text[:header_index]
-        return self.clean_content('\n'.join(preamble))
-
-    @staticmethod
-    def clean_content(text: str) -> str:
-        cleaned_text = text.replace("'''", '')
-        # cleaned_text = cleaned_text.replace("\n", '')
-        return cleaned_text.strip()
+        return '\n'.join(preamble).strip()
 
     def parse_section(self, text: List[str]) -> 'List[ArticleSection]':
         subsection_indices = self._find_subsections(text)
@@ -57,16 +57,19 @@ class ArticleSection:
         content = self._parse_subsections(text, subsection_indices)
         return content
 
-    def _find_subsections(self, text):
-        new_depth = self.depth + 1
+    def _find_subsections(self, text: List[str]) -> List[int]:
         subsection_indices = []
         for index, line in enumerate(text):
-            cleaned_line = line.strip()
-            if cleaned_line[:new_depth] == '=' * new_depth and cleaned_line[new_depth] != '=':
+            if self.is_header(line):
                 subsection_indices.append(index)
         return subsection_indices
 
-    def _parse_subsections(self, text, subsection_indices):
+    def is_header(self, line: str) -> bool:
+        new_depth = self.depth + 1
+        cleaned_line = line.strip()
+        return cleaned_line[:new_depth] == '=' * new_depth and cleaned_line[new_depth] != '='
+
+    def _parse_subsections(self, text: List[str], subsection_indices: List[int]):
         content = []
         subsection_indices.append(len(text))
         for subsection_start, subsection_end in zip(subsection_indices[:-1], subsection_indices[1:]):
@@ -121,7 +124,7 @@ if __name__ == '__main__':
     text = open('datasets/scratch/article_example.md').read()
     article = Article(title, text)
     content = article.sections.get_content()
-    open('test.txt', 'w').write(content)
+    print(len(content))
 
     for header in article.sections:
         print(header)
