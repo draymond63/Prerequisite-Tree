@@ -87,18 +87,22 @@ class ArticleSection:
                 return index
         return -1
 
+    def __iter__(self):
+        return self.iter()
+    
+    def iter(self, leaves_only: bool = False):
+        if not leaves_only or not self.children:
+            yield self
+        for section in self.children:
+            for child in section.iter(leaves_only):
+                yield child
+
     def iter_headers(self):
         yield [self.header]
         for section in self.children:
             for header in section.iter_headers():
                 header.insert(0, self.header)
                 yield header
-
-    def __iter__(self):
-        yield self
-        for section in self.children:
-            for child in section:
-                yield child
 
     def get_content(self) -> str:
         output = f'\n{"=" * self.depth} {self.header} {"=" * self.depth}'
