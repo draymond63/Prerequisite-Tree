@@ -5,6 +5,7 @@ from typing import List, Optional
 class Article:
     def __init__(self, title: str, content: str) -> None:
         text = content.split('\n')
+        self.title = title
         path, text = text[0], text[1:]
         self.path = self.parse_path(path)
         self.sections = ArticleSection(title, text)
@@ -13,6 +14,12 @@ class Article:
         matched_path = re.search(r'\{\{([^\]]+)\}\}', text)
         if matched_path:
             return matched_path.group(1).strip('*').strip()
+        
+    def get_section(self, header_path: List[str]) -> str:
+        return self.sections.get_section([self.title, *header_path])
+    
+    def get_content(self) -> str:
+        return self.sections.get_content()
 
 
 class ArticleSection:
@@ -36,7 +43,9 @@ class ArticleSection:
 
     @staticmethod
     def clean_content(text: str) -> str:
-        return text.replace("'''", '')
+        cleaned_text = text.replace("'''", '')
+        # cleaned_text = cleaned_text.replace("\n", '')
+        return cleaned_text.strip()
 
     def parse_section(self, text: List[str]) -> 'List[ArticleSection]':
         subsection_indices = self._find_subsections(text)
@@ -75,11 +84,18 @@ class ArticleSection:
         return -1
 
     def __iter__(self):
-        yield self.header, self.content, self.depth
+        yield [self.header]
         for section in self.children:
-            for header, content, depth in section:
-                complete_header = f'{self.header}/{header}' if not self.header in header else header
-                yield complete_header, content, depth
+            for header in section:
+                header.insert(0, self.header)
+                yield header
+
+    def iter_content(self):
+        yield [self.header], self.content
+        for section in self.children:
+            for header, content in section.iter_content():
+                header.insert(0, self.header)
+                yield header, content
 
     def get_content(self) -> str:
         output = f'\n{"=" * self.depth} {self.header} {"=" * self.depth}'
@@ -87,6 +103,14 @@ class ArticleSection:
         for sections in self.children:
             output += sections.get_content()
         return output
+
+    def get_section(self, header_path: List[str]) -> Optional[str]:
+        if len(header_path) == 1 and header_path[0] == self.header:
+            return self.content
+        for section in self.children:
+            content = section.get_section(header_path[1:])
+            if content is not None:
+                return content
 
     def __str__(self) -> str:
         return f'Section: {self.header} ({self.depth})'
@@ -99,5 +123,5 @@ if __name__ == '__main__':
     content = article.sections.get_content()
     open('test.txt', 'w').write(content)
 
-    for header, content, depth in article.sections:
-        print(header, depth)
+    for header in article.sections:
+        print(header)
