@@ -13,8 +13,7 @@ class Article:
     @staticmethod
     def clean_content(text: str) -> str:
         cleaned_text = text.replace("'''", '')
-        # TODO: Only match beginning of the line
-        cleaned_text = re.sub(r';([^:]+):', r'====\1====\n', cleaned_text, flags=re.MULTILINE)
+        cleaned_text = re.sub(r'^;([^:]+):', r'====\1====\n', cleaned_text, flags=re.MULTILINE)
         return cleaned_text.strip()
 
     def parse_path(self, text: str) -> Optional[str]:
