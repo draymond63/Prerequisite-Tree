@@ -13,7 +13,8 @@ class Article:
     @staticmethod
     def clean_content(text: str) -> str:
         cleaned_text = text.replace("'''", '')
-        cleaned_text = re.sub(r';([^:]+):', r'====\1====\n', cleaned_text)
+        # TODO: Only match beginning of the line
+        cleaned_text = re.sub(r';([^:]+):', r'====\1====\n', cleaned_text, flags=re.MULTILINE)
         return cleaned_text.strip()
 
     def parse_path(self, text: str) -> Optional[str]:
@@ -57,6 +58,7 @@ class ArticleSection:
         content = self._parse_subsections(text, subsection_indices)
         return content
 
+    # TODO: Switch to regex
     def _find_subsections(self, text: List[str]) -> List[int]:
         subsection_indices = []
         for index, line in enumerate(text):
@@ -86,19 +88,18 @@ class ArticleSection:
                 return index
         return -1
 
-    def __iter__(self):
+    def iter_headers(self):
         yield [self.header]
         for section in self.children:
-            for header in section:
+            for header in section.iter_headers():
                 header.insert(0, self.header)
                 yield header
 
-    def iter_content(self):
-        yield [self.header], self.content
+    def __iter__(self):
+        yield self
         for section in self.children:
-            for header, content in section.iter_content():
-                header.insert(0, self.header)
-                yield header, content
+            for child in section:
+                yield child
 
     def get_content(self) -> str:
         output = f'\n{"=" * self.depth} {self.header} {"=" * self.depth}'
@@ -123,8 +124,8 @@ if __name__ == '__main__':
     title = 'Control Systems'
     text = open('datasets/scratch/article_example.md').read()
     article = Article(title, text)
-    content = article.sections.get_content()
-    print(len(content))
+    # content = article.sections.get_content()
+    # print(content)
 
-    for header in article.sections:
-        print(header)
+    for section in article.sections:
+        print('  ' * section.depth, f'{section.depth}. {section.header}')
