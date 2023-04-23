@@ -6,8 +6,10 @@ class Article:
     def __init__(self, title: str, content: str) -> None:
         text = self.clean_content(content).split('\n')
         self.title = title
-        path, text = text[0], text[1:]
+        path = text[0]
         self.path = self.parse_path(path)
+        if self.path is not None:
+            text = text[1:]
         self.sections = ArticleSection(title, text)
 
     @staticmethod
