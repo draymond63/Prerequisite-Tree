@@ -23,8 +23,11 @@ class Article:
         if matched_path:
             return matched_path.group(1).strip('*').strip()
 
-    def get_section(self, header_path: List[str]) -> str:
+    def get_section(self, header_path: List[str]) -> 'Optional[ArticleSection]':
         return self.sections.get_section([self.title, *header_path])
+    
+    def find_section(self, header: str) -> 'Optional[ArticleSection]':
+        return self.sections.find_section(header)
 
     def get_content(self) -> str:
         return self.sections.get_content()
@@ -55,7 +58,8 @@ class ArticleSection:
         if not len(subsection_indices):
             if self._find_header(text) == -1:
                 return []
-            return [ArticleSection(self.header, text, self.depth + 1)]
+            self.depth += 1
+            return self.parse_section(text)
         content = self._parse_subsections(text, subsection_indices)
         return content
 
@@ -108,18 +112,31 @@ class ArticleSection:
 
     def get_content(self) -> str:
         output = f'\n{"=" * self.depth} {self.header} {"=" * self.depth}'
-        output += self.content
+        output += '\n' + self.content
         for sections in self.children:
             output += sections.get_content()
         return output
 
-    def get_section(self, header_path: List[str]) -> Optional[str]:
-        if len(header_path) == 1 and header_path[0] == self.header:
-            return self.content
+    def find_sections_matching(self, condition: callable) -> 'List[ArticleSection]':
+        sections = []
+        if condition(self):
+            sections.append(self)
         for section in self.children:
-            content = section.get_section(header_path[1:])
-            if content is not None:
-                return content
+            sections.extend(section.find_sections_matching(condition))
+        return sections
+
+    def find_section(self, header: str) -> 'Optional[ArticleSection]':
+        found_sections = self.find_sections_matching(lambda section: section.header == header)
+        if len(found_sections) >= 1:
+            return found_sections[-1]
+
+    def get_section(self, header_path: List[str]) -> 'Optional[ArticleSection]':
+        if len(header_path) == 1 and header_path[0] == self.header:
+            return self
+        for section in self.children:
+            retrieved_child = section.get_section(header_path[1:])
+            if retrieved_child is not None:
+                return retrieved_child
 
     def __str__(self) -> str:
         return f'Section: {self.header} ({self.depth})'
@@ -129,8 +146,18 @@ if __name__ == '__main__':
     title = 'Control Systems'
     text = open('datasets/scratch/article_example.md').read()
     article = Article(title, text)
-    # content = article.sections.get_content()
-    # print(content)
+    content = article.sections.get_content()
+    print(content)
 
-    for section in article.sections:
-        print('  ' * section.depth, f'{section.depth}. {section.header}')
+    # sect = article.find_section('Systems')
+    # print(sect.content)
+
+    # for section in article.sections:
+    #     print(section.header)
+    #     print(section.content)
+    #     print('  ' * section.depth, f'{section.depth}. {section.header}')
+    #     found_section = article.find_section(section.header)
+    #     if section != found_section:
+    #         print(f'ERROR: {section.header} != {found_section.header}')
+    #     else:
+    #         print(f'OK: {section.header} == {found_section.header}')
