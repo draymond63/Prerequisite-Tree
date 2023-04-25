@@ -1,6 +1,9 @@
+import re
+import string
 from uuid import uuid4, UUID
-from typing import Set, Dict, List, Optional
+from typing import Set, Dict, List
 
+from utils import StringUtils
 from article_model import Article
 
 
@@ -12,7 +15,7 @@ class PrerequisiteMap:
     def __init__(self, concept_candidates: Dict[str, str], corpus: List[Article]) -> None:
         self.corpus = corpus # Set of documents
         self.map = self.select_valid_concepts(concept_candidates)
-        self.generate_connections()
+        self._generate_connections()
 
     def select_valid_concepts(self, concept_candidates: Dict[str, str]) -> 'Dict[str, Concept]':
         concepts = {}
@@ -29,7 +32,7 @@ class PrerequisiteMap:
     def is_valid_concept(self, concept: 'Concept') -> bool:
         return True
 
-    def generate_connections(self) -> None:
+    def _generate_connections(self) -> None:
         for concept in self.map.values():
             concept.prerequisites = self.parse_concepts(concept.definition)
 
@@ -41,7 +44,7 @@ class PrerequisiteMap:
 # TODO: Add ability to merge concepts
 class Concept:
     name: str
-    definitions: str
+    definition: str
     prerequisites: 'Set[Concept]' # TODO: Or UUIDs?
     topic_set: 'Set[Concept]' # TODO: Or UUIDs?
 
@@ -62,42 +65,28 @@ class Concept:
             yield concept.name
 
     def get_best_name(self, name: str, definition: str) -> str:
-        acronym_title = self.parse_acronym_meaning(name, definition)
+        cleaned_name = re.sub(r'\([^)]+\)', '', name) # Remove parentheticals
+        acronym_title = StringUtils.parse_acronym(cleaned_name, definition)
         if acronym_title:
-            return acronym_title
-        return name
-
-    @staticmethod
-    def parse_acronym(title: str, definition: str) -> Optional[str]:
-        """Returns the title of the acronym if the definition is an acronym of the title, otherwise None."""
-        if not title.isupper() or ' ' in title:
-            return False
-        definition_words = [word.capitalize() for word in definition.replace('-', ' ').split(' ')]
-        remaining_acronym_letters = title.replace('/', '')
-        first_acronym_word: int | None = None
-        last_acronym_word: int | None = None
-        for word_index, word in enumerate(definition_words):
-            if not len(word):
-                continue
-            word_in_acronym = False
-            if word[0] == remaining_acronym_letters[0]:
-                word_in_acronym = True
-                remaining_acronym_letters = remaining_acronym_letters[1:]
-            if len(remaining_acronym_letters):
-                for character in word[1:]:
-                    candidate = character.upper() if word_in_acronym else character
-                    if candidate == remaining_acronym_letters[0]:
-                        word_in_acronym = True
-                        remaining_acronym_letters = remaining_acronym_letters[1:]
-                    if not len(remaining_acronym_letters):
-                        break
-            if word_in_acronym and first_acronym_word is None:
-                first_acronym_word = word_index
-            if not remaining_acronym_letters:
-                last_acronym_word = word_index + 1
-                break
-        if first_acronym_word is not None and last_acronym_word is not None:
-            return  ' '.join(definition_words[first_acronym_word:last_acronym_word])
+            cleaned_name = acronym_title
+        characters_to_replace = StringUtils.remove_characters(string.punctuation, "-'+")
+        cleaned_name = StringUtils.remove_characters(cleaned_name, characters_to_replace).strip()
+        return cleaned_name
 
     def __repr__(self) -> str:
         return f'Concept: {self.name}'
+
+
+if __name__ == '__main__':
+    from page_retrieval import PageRetriever
+    from article_model import Article
+
+    title = 'Control_Systems/Glossary'
+    # text = PageRetriever().get_article_text(title)
+    text = open('datasets/scratch/Control Systems-Glossary.md').read()
+    article = Article(title, text)
+
+    concepts = {section.header: section.content for section in article.sections.iter(leaves_only=True)}
+    concept_map = PrerequisiteMap(concepts, [article])
+    names = [concept.name for concept in concept_map.map.values()]
+    open('test.txt', 'w').write('\n'.join(names))
