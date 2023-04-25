@@ -1,8 +1,12 @@
+import re
 import string
 from typing import Optional
 
 
 class StringUtils:
+    def remove_tags(text: str) -> str:
+        return re.sub(r'<[^>]+>.*?</[^>]+>', '', text)
+
     @staticmethod
     def replace_characters(text: str, map: dict) -> str:
         return text.translate(str.maketrans(map))
