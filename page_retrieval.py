@@ -1,7 +1,6 @@
 import re
-import pandas as pd
-from tqdm import tqdm
-from typing import Optional, List, Dict
+from utils import StringUtils
+from typing import Optional, List
 from xml.etree.cElementTree import iterparse
 
 
@@ -28,7 +27,7 @@ class PageRetriever:
 				page_id = element.text
 			elif 'text' in element.tag and page_active and self.is_valid_title(page_title, page_titles, regex):
 				page_count += 1
-				page_text = self.remove_wiki_links(element.text) if element.text else ''
+				page_text = self.clean_page_text(element.text)
 				yield page_title, page_id, page_text
 			if page_titles is not None and page_count >= len(page_titles):
 				break
@@ -47,11 +46,14 @@ class PageRetriever:
 	def get_article_text(self, page_title: str) -> str:
 		title, page_id, text = next(self.get([page_title]))
 		return text
-
+	
 	@staticmethod
-	def remove_wiki_links(text: str) -> str:
-		unlinked_text = re.sub(r'\[\[.*?\|([^\]]+)\]\]', r'\1', text)
-		return re.sub(r'\[\[.*\]\]', '', unlinked_text)	
+	def clean_page_text(text: str) -> str:
+		if not text:
+			return ''
+		cleaned_text = StringUtils.remove_wiki_links(text)
+		cleaned_text = StringUtils.remove_tags(text)
+		return cleaned_text
 
 if __name__ == '__main__':
 	# pages = pd.read_csv('datasets/departments.tsv', sep='\t').values.flatten().tolist()
