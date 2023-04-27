@@ -35,6 +35,7 @@ class PrerequisiteMap:
 
 	# TODO: How many ngrams should be counted?
 	# TODO: Supply vocabulary?
+	# TODO: Don't remove stop words?
 	def get_ngrams(self, corpus: List[str], ngram_range=(1, 5)) -> Dict[str, int]:
 		vectorizer = TfidfVectorizer(analyzer='word', ngram_range=ngram_range, min_df=1, stop_words='english', tokenizer=self.lemmatizer)
 		X = vectorizer.fit_transform(corpus)

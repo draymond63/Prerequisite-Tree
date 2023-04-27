@@ -1,7 +1,14 @@
 import re
 import string
+import networkx as nx
 from typing import Optional
 
+# edges = pd.read_csv('datasets/scratch/initial-prereqs.tsv', sep='\t', header=None)
+def draw_graph(edges: list, filename: str = 'example.png'):
+	G = nx.DiGraph()
+	G.add_edges_from(edges)
+	p=nx.drawing.nx_pydot.to_pydot(G)
+	p.write_png(filename)
 
 class StringUtils:
 	@staticmethod
