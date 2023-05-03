@@ -1,4 +1,4 @@
 datasets/
 *__pycache__/
-*playground.py
+*playground.*
 babelnet_conf.yml

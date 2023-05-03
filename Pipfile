@@ -18,6 +18,7 @@ graphviz = "*"
 babelnet = "*"
 
 [dev-packages]
+ipykernel = "*"
 
 [requires]
 python_version = "3.8"
