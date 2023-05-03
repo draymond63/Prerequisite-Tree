@@ -1,20 +1,27 @@
 import pandas as pd
-from typing import List
+from typing import Set, Optional, Iterable
 from tqdm import tqdm
+from copy import deepcopy
 
-
-def get_category_depth(df: pd.DataFrame) -> dict:
+def get_category_tree(df: pd.DataFrame, add_depth = False) -> dict:
     categories = {}
+    default_value = {'children': set(), 'depth': None} if add_depth else set()
     print("Building category tree") # ~8 minutes
     for index, row in tqdm(df.iterrows(), total=len(df)):
-        parent = categories.setdefault(row['category'], {'children': set(), 'depth': None})
-        child = categories.setdefault(row['item'], {'children': set(), 'depth': None})
-        parent['children'].add(row['item'])
+        parent = categories.setdefault(row['category'], deepcopy(default_value))
+        categories.setdefault(row['item'], deepcopy(default_value))
+        if add_depth:
+            parent['children'].add(row['item'])
+        else:
+            parent.add(row['item'])
+    return categories
 
+def get_category_depth(df: pd.DataFrame) -> dict:
+    categories = get_category_tree(df, add_depth=True)
     print("Calculating category depth") # ~37 minutes
     categories['Contents']['depth'] = 0
     pbar = tqdm(total=len(categories))
-    pbar.update(1)
+    pbar.update()
     set_depth(categories, 'Contents', pbar=pbar)
     depths = {category: info['depth'] for category, info in categories.items()}
     return depths
@@ -57,31 +64,32 @@ def generate_acyclic_hierarchy(path = 'datasets/raw/enwiki-categories.tsv') -> p
     df = make_graph_acyclic(df, depths)
     return df
 
-visited_categories = set()
+def get_all_children(relations: dict, top_level_category: str):
+    pbar = tqdm()
+    visited_categories = set()
+    def _get_all_children(top_level_category: str, depth = 0) -> Set[str]:
+        if top_level_category in visited_categories:
+            return set()
+        visited_categories.add(top_level_category)
+        if pbar: pbar.update(1)
+        children = relations[top_level_category]
+        all_children = {top_level_category}
+        for child in children:
+            all_children.update(_get_all_children(child, depth + 1))
+        return all_children
+    return _get_all_children(relations, top_level_category)
 
-def get_child_categories(df: pd.DataFrame, category: str) -> List[str]:
-    return df[df['category'] == category]['item'].values.flatten().tolist()
-
-def get_all_children(df: pd.DataFrame, top_level_category: str, depth = 0) -> List[str]:
-    if top_level_category in visited_categories:
-        print(f'{depth}. {top_level_category} already visited')
-        return []
-    visited_categories.add(top_level_category)
-    children = get_child_categories(df, top_level_category)
-    print(f'{depth}. {top_level_category}: {children}')
-    all_children = []
-    for child in children:
-        all_children.append(child)
-        all_children.extend(get_all_children(df, child, depth + 1))
-    return all_children
-
-if __name__ == '__main__':
-    df = pd.read_csv('datasets/generated/category_hierarchy.tsv', sep='\t')
-    top_levels = {'Branches_of_science', 'Engineering_disciplines', 'Fields_of_mathematics', 'Subfields_of_economics'}
-    # top_levels = {'Tensors', 'Differential_forms'}
+def get_valid_relations(df: pd.DataFrame, top_levels: Iterable[str] = {'Branches_of_science', 'Engineering_disciplines', 'Fields_of_mathematics', 'Subfields_of_economics'}) -> pd.DataFrame:
+    categories = get_category_tree(df)
     viable_topics = set()
     viable_topics.update(top_levels)
     for top_level in top_levels:
-        viable_topics.update(get_all_children(df, top_level))
-        viable_df = df[df['category'].isin(viable_topics) & df['item'].isin(viable_topics)]
-        viable_df.to_csv('datasets/generated/valid_categories.tsv', sep='\t', index=False)
+        viable_topics.update(get_all_children(categories, top_level))
+    viable_df = df[df['category'].isin(viable_topics) & df['item'].isin(viable_topics)]
+    return viable_df
+
+if __name__ == '__main__':
+    df = pd.read_csv('datasets/generated/valid_categories.tsv', sep='\t')
+    categories = set(df['category'].unique()) | set(df['item'].unique())
+    with open('datasets/generated/valid_categories.txt', 'w', encoding='utf-8') as f:
+        f.write('\n'.join(categories))
