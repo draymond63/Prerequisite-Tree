@@ -1,47 +1,42 @@
+import numpy as np
 import pandas as pd
-from typing import Set, Optional, Iterable
+from typing import Set, Iterable, Dict, Mapping, Tuple
 from tqdm import tqdm
-from copy import deepcopy
 
-def get_category_tree(df: pd.DataFrame, add_depth = False) -> dict:
-    categories = {}
-    default_value = {'children': set(), 'depth': None} if add_depth else set()
-    print("Building category tree") # ~8 minutes
-    for index, row in tqdm(df.iterrows(), total=len(df)):
-        parent = categories.setdefault(row['category'], deepcopy(default_value))
-        categories.setdefault(row['item'], deepcopy(default_value))
-        if add_depth:
-            parent['children'].add(row['item'])
-        else:
-            parent.add(row['item'])
-    return categories
+def get_child_tree(df: pd.DataFrame) -> Dict[str, set]:
+    parents = df.groupby('category')['item'].apply(set)
+    leafs = set(df['item'].unique()) - set(parents.keys())
+    leafs = pd.Series(index=leafs).fillna("").apply(set)
+    parents = pd.concat([parents, leafs])
+    return parents.to_dict()
 
-def get_category_depth(df: pd.DataFrame) -> dict:
-    categories = get_category_tree(df, add_depth=True)
-    print("Calculating category depth") # ~37 minutes
-    categories['Contents']['depth'] = 0
-    pbar = tqdm(total=len(categories))
+def get_parent_tree(df: pd.DataFrame) -> Dict[str, set]:
+    return df.groupby('item')['category'].apply(set).to_dict()
+
+def get_category_depth(children: Dict[str, set], root = 'Contents') -> Dict[str, int]:
+    depths = {category: None for category in children.keys()}
+    depths[root] = 0
+    pbar = tqdm(total=len(children))
     pbar.update()
-    set_depth(categories, 'Contents', pbar=pbar)
-    depths = {category: info['depth'] for category, info in categories.items()}
+    set_depth(children, depths, 'Contents', pbar=pbar)
     return depths
 
-def set_depth(categories: dict, parent: str, depth: int = 1, pbar = None) -> None:
-    for child in categories[parent]['children']:
-        if should_set_depth(categories, child, depth):
-            if pbar: pbar.update(1)
-            categories[child]['depth'] = depth
-    for child in categories[parent]['children']:
-        for grandchild in categories[child]['children']:
-            if should_set_depth(categories, grandchild, depth + 1):
-                set_depth(categories, child, depth + 1, pbar)
+def set_depth(categories: dict, depths: dict, parent: str, depth: int = 1, pbar = None) -> None:
+    for child in categories[parent]:
+        if should_set_depth(depths, child, depth):
+            if pbar: pbar.update()
+            depths[child] = depth
+    for child in categories[parent]:
+        for grandchild in categories[child]:
+            if should_set_depth(depths, grandchild, depth + 1):
+                set_depth(categories, depths, child, depth + 1, pbar)
                 break
 
-def should_set_depth(categories: dict, item: str, depth: int) -> bool:
-    return categories[item]['depth'] is None or categories[item]['depth'] > depth + 1
+def should_set_depth(depths: dict, item: str, depth: int) -> bool:
+    return depths[item] is None or depths[item] > depth + 1
 
 # Removes connections that make the graph acyclic
-def make_graph_acyclic(df: pd.DataFrame, depths: dict) -> pd.DataFrame: # <1 minute
+def make_graph_acyclic(df: pd.DataFrame, depths: Mapping[str, int]) -> pd.DataFrame: # <1 minute
     parent_depths = df['category'].map(depths)
     child_depths = df['item'].map(depths)
     distances = child_depths - parent_depths
@@ -52,35 +47,36 @@ def remove_hidden_categories(df: pd.DataFrame) -> pd.DataFrame:
     return df[~(df['item'].isin(hidden_categories) & df['category'].isin(hidden_categories))]
 
 # 7978906 -> 3336726 entries
-def generate_acyclic_hierarchy(path = 'datasets/raw/enwiki-categories.tsv') -> pd.DataFrame:
+def generate_acyclic_hierarchy(path = 'datasets/raw/enwiki-categories.tsv') -> Tuple[pd.DataFrame, pd.DataFrame]:
     df = pd.read_csv(path, sep='\t')
     df.columns = ['item', 'category', 'relation']
     df = df.filter(items=['item', 'category'], axis=1)
     df = remove_hidden_categories(df) # Removes ~181629 unhelpful categories
-    depths = get_category_depth(df)
-    depths_df = pd.DataFrame.from_dict(depths, orient='index')
-    depths_df.to_csv('datasets/generated/category_depths.tsv', sep='\t', index=True, header=False)
+    print("Generating children tree")
+    relations = get_child_tree(df) # ~30 seconds
+    print("Calculating category depth") # ~37 minutes
+    depths = get_category_depth(relations)
     print("Making graph acyclic")
     df = make_graph_acyclic(df, depths)
-    return df
+    return df, depths
 
 def get_all_children(relations: dict, top_level_category: str):
-    pbar = tqdm()
+    pbar = tqdm(total=len(relations))
     visited_categories = set()
-    def _get_all_children(top_level_category: str, depth = 0) -> Set[str]:
-        if top_level_category in visited_categories:
+    def _get_all_children(category: str, depth = 0) -> Set[str]:
+        if category in visited_categories:
             return set()
-        visited_categories.add(top_level_category)
+        visited_categories.add(category)
         if pbar: pbar.update(1)
-        children = relations[top_level_category]
-        all_children = {top_level_category}
+        children = relations[category]
+        all_children = {category}
         for child in children:
             all_children.update(_get_all_children(child, depth + 1))
         return all_children
-    return _get_all_children(relations, top_level_category)
+    return _get_all_children(top_level_category)
 
 def get_valid_relations(df: pd.DataFrame, top_levels: Iterable[str] = {'Branches_of_science', 'Engineering_disciplines', 'Fields_of_mathematics', 'Subfields_of_economics'}) -> pd.DataFrame:
-    categories = get_category_tree(df)
+    categories = get_child_tree(df)
     viable_topics = set()
     viable_topics.update(top_levels)
     for top_level in top_levels:
@@ -88,8 +84,13 @@ def get_valid_relations(df: pd.DataFrame, top_levels: Iterable[str] = {'Branches
     viable_df = df[df['category'].isin(viable_topics) & df['item'].isin(viable_topics)]
     return viable_df
 
+def get_mentioned_categories(df: pd.DataFrame) -> Set[str]:
+    return set(df['category'].unique()).union(set(df['item'].unique()))
+
 if __name__ == '__main__':
-    df = pd.read_csv('datasets/generated/valid_categories.tsv', sep='\t')
-    categories = set(df['category'].unique()) | set(df['item'].unique())
-    with open('datasets/generated/valid_categories.txt', 'w', encoding='utf-8') as f:
-        f.write('\n'.join(categories))
+    df = pd.read_csv('datasets/generated/category_hierarchy.tsv', sep='\t')
+    relations = get_child_tree(df)
+    depths = get_category_depth(relations)
+    print(depths.head())
+    # generate_acyclic_hierarchy()    
+
