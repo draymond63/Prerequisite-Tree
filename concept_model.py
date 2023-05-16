@@ -1,86 +1,91 @@
-import re
-import string
-from tqdm import tqdm
-from uuid import uuid4, UUID
-from nltk import word_tokenize
-from nltk.stem import WordNetLemmatizer
-from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
-from typing import Set, Dict, List, Optional
+import spacy
+import babelnet as bn
+from joblib import Memory
+from babelnet import BabelSynset, Language
+from babelnet.resources import WikipediaID, BabelSynsetID
+from typing import Set, Dict, List
 
-from utils import StringUtils
-from article_model import Article
+class Definition:
+	def __init__(self, gloss: str, prereqs: Set[BabelSynsetID]) -> None:
+		self.gloss = gloss
+		self.prereqs = prereqs
 
+	def __repr__(self) -> str:
+		return f'Definition: {self.gloss}'
 
-class LemmaTokenizer:
-	def __init__(self):
-		self.wnl = WordNetLemmatizer()
-	def __call__(self, doc) -> List[str]:
-		regex_num_ponctuation = '(\d+)|([^\w\s])'
-		regex_little_words = r'(\b\w{1,2}\b)'
-		return [self.wnl.lemmatize(t) for t in word_tokenize(doc) 
-				if not re.search(regex_num_ponctuation, t) and not re.search(regex_little_words, t)]
+class Concept:
+	def __init__(self, name: str, topic_set: Set[BabelSynsetID], definitions: List[Definition]) -> None:
+		self.name = name
+		self.topic_set = topic_set
+		self.definitions = definitions
 
+	@property
+	def glosses(self):
+		for definition in self.definitions:
+			yield definition.gloss
+
+	def __repr__(self) -> str:
+		return f'Concept: {self.name}'
 
 class PrerequisiteMap:
-	map: 'Dict[UUID, Concept]'
-	_corpus: List[Article]
+	memory = Memory("datasets/cache")
+	model = spacy.load('en_core_web_sm')
+	map: 'Dict[BabelSynsetID, Concept]'
 
-	# TODO: Ideally accept a list of candidates, without definitions
-	def __init__(self, concept_candidates: Dict[str, str], corpus: List[Article]) -> None:
-		self._corpus = corpus # Set of documents
-		self.lemmatizer = LemmaTokenizer()
-		self.corpus_ngrams = self.get_ngrams([article.get_content() for article in corpus])
-		self.map = self.select_valid_concepts(concept_candidates)
-		self._generate_connections()
+	def __init__(self) -> None:
+		self.map = dict()
+		self.lang = Language.EN
 
-	# TODO: How many ngrams should be counted?
-	# TODO: Supply vocabulary?
-	# TODO: Don't remove stop words?
-	def get_ngrams(self, corpus: List[str], ngram_range=(1, 5)) -> Dict[str, int]:
-		vectorizer = TfidfVectorizer(analyzer='word', ngram_range=ngram_range, min_df=1, stop_words='english', tokenizer=self.lemmatizer)
-		X = vectorizer.fit_transform(corpus)
-		candidates = vectorizer.get_feature_names_out()
-		counts = X.toarray().sum(axis=0)
-		counts = {candidate: count for candidate, count in zip(candidates, counts) if count > 0}
-		return counts
+	def find_concept(self, name: str, wiki_category = None) -> 'Concept':
+		synset = self.find_synset(name, wiki_category)
+		return self.get_concept(synset)
 
-	def select_valid_concepts(self, concept_candidates: Dict[str, str]) -> 'Dict[str, Concept]':
-		concepts = {}
-		for name, definition in concept_candidates.items():
-			concept = Concept(name, definition)
-			if self.is_valid_concept(concept):
-				concepts[concept.uuid] = concept
-		return concepts
+	@memory.cache
+	def find_synset(self, name: str, wiki_category = None) -> BabelSynset:
+		print('Running find_synset')
+		if wiki_category is None:
+			return bn.get_synset(WikipediaID(name, language=self.lang))
+		synsets = bn.get_synsets(name, from_langs={self.lang})
+		print(synsets)
+		for synset in synsets:
+			print(synset.categories(self.lang))
+			# TODO: Find the best synset based on the proximity of the given category to the synset's
 
-	def is_valid_concept(self, concept: 'Concept') -> bool:
-		ngrams = self.corpus_ngrams.keys()
-		lemmatized_concept = ' '.join(self.lemmatizer(concept.name)).lower()
-		return lemmatized_concept in ngrams # TODO: Base on TF-IDF
+	def get_concept(self, synset: BabelSynset) -> 'Concept':
+		name = synset.main_sense().lemma # TODO: Wrong
+		if synset.id in self.map:
+			return self.map[synset.id]
+		definitions = [Definition(gloss.gloss, self._generate_prereqs(gloss.gloss)) for gloss in synset.glosses()]
+		topic_set = self._generate_topic_set(synset)
+		concept = Concept(name, topic_set, definitions)
+		self.map[concept.wikiID] = concept
+		return concept
 
-	def _generate_connections(self) -> None:
-		for concept in self.map.values():
-			concept.prerequisites = self.parse_concepts(concept.definition)
-			concept.prerequisites -= {concept}
-			print(concept.name, [*concept.get_prerequiste_relations()])
+	def _generate_prereqs(self, definition: str) -> 'Set[BabelSynsetID]':
+		# TODO: Extract main phrase of sentence
+		# TODO: For each noun chunk, find all possible synsets
+		# TODO: Determine best synset for each noun chunk based on categorical similarity to original synset
+		parsed = self.model(definition)
+		for noun in parsed.noun_chunks:
+			cleaned_noun = self.clean_noun(noun.text)
+			# TODO: Get the synset for the noun
+			print(f'"{cleaned_noun}"', noun.root.dep_, noun.root.head.text)
 
-	def parse_concepts(self, text: str) -> 'Set[Concept]':
-		if not text:
-			return set()
-		ngrams = self.get_ngrams([text]).keys()
-		found_concepts = set()
-		for ngram in ngrams:
-			concept = self.find_concept(ngram)
-			if concept:
-				found_concepts.add(concept)
-		return found_concepts
+	# TODO: Find spacy way of dropping stop words
+	def clean_noun(self, text: str) -> str:
+		words = text.split(' ')
+		words = [word for word in words if word not in self.model.Defaults.stop_words]
+		return ' '.join(words)
 
-	def find_concept(self, name: str) -> 'Optional[Concept]':
-		lemmatized_name = ' '.join(self.lemmatizer(name)).lower()
-		for concept in self.map.values():
-			lemmatized_concept = ' '.join(self.lemmatizer(concept.name)).lower()
-			if lemmatized_name == lemmatized_concept:
-				return concept
+	# TODO: Generate topic set based on relations, not glosses
+	def _generate_topic_set(self, synset: BabelSynset) -> 'Set[BabelSynsetID]':
+		topic_set = set()
+		for gloss in synset.glosses():
+			for token in gloss.token_ids:
+				topic_set.add(token.id)
+		return topic_set
 
+	# TODO: get_prerequiste_relations no longer exists
 	def save(self, path: str) -> None:
 		with open(path, 'w') as f:
 			for concept in self.map.values():
@@ -88,63 +93,6 @@ class PrerequisiteMap:
 					f.write(f'{concept.name}\t{prereq}\n')
 
 
-# TODO: Add ability to merge concepts
-class Concept:
-	name: str
-	definition: str
-	prerequisites: 'Set[Concept]' # TODO: Or UUIDs?
-	topic_set: 'Set[Concept]' # TODO: Or UUIDs?
-
-	def __init__(self, name: str, definition: str) -> None:
-		self.uuid = uuid4()
-		# TODO: How should multiple names and definitions be handled?
-		self.name = self.get_best_name(name, definition)
-		self.definition = definition # All valid definitions of the concept
-		self.prerequisites = set() # Topics that must be learned before this topic
-		self.topic_set = set() # Concepts that are part of this topic (e.g. a chapter in a book)
-
-	def get_prerequiste_relations(self):
-		for prereq in self.prerequisites:
-			yield prereq.name
-
-	def get_concepts_in_topic(self):
-		for concept in self.topic_set:
-			yield concept.name
-
-	def get_best_name(self, name: str, definition: str) -> str:
-		cleaned_name = re.sub(r'\([^)]+\)', '', name) # Remove parentheticals
-		acronym_title = StringUtils.parse_acronym(cleaned_name, definition)
-		if acronym_title:
-			cleaned_name = acronym_title
-		characters_to_replace = StringUtils.remove_characters(string.punctuation, "-'+")
-		cleaned_name = StringUtils.remove_characters(cleaned_name, characters_to_replace).strip()
-		# TODO: Nounify
-		return cleaned_name
-
-	def __repr__(self) -> str:
-		return f'Concept: {self.name}'
-
-
-def parse_textbook(page_titles: List[str], glossary_title: str) -> PrerequisiteMap:
-	pages = {page_title: page_text for page_title, page_id, page_text in tqdm(PageRetriever().get(page_titles), total=len(page_titles))}
-	glossary = Article(glossary_title, pages[glossary_title])
-	articles = [Article(title, text) for title, text in pages.items()]
-	concepts = {section.header: section.content for section in glossary.sections.iter(leaves_only=True)}
-	return PrerequisiteMap(concepts, articles)
-
 if __name__ == '__main__':
-	from page_retrieval import PageRetriever
-	from article_model import Article
-
-	title = 'Control_Systems/Glossary'
-	# text = PageRetriever().get_article_text(title)
-	text = open('datasets/scratch/Control Systems-Glossary.md').read()
-	article = Article(title, text)
-
-	concepts = {section.header: section.content for section in article.sections.iter(leaves_only=True)}
-	concept_map = PrerequisiteMap(concepts, [article])
-	concept_map.save('prereqs.tsv')
-
-	# names = [concept.name for concept in concept_map.map.values()]
-	# open('valid_concepts.txt', 'w').write('\n'.join(names))
-	# open('ngrams.txt', 'w').write('\n'.join(concept_map.corpus_ngrams.keys()))
+	# BabelSynsetID('bn:03566112n')
+	PrerequisiteMap().find_concept('Control Theory', 'Mathematics')
