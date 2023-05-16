@@ -3,6 +3,7 @@ import babelnet as bn
 from joblib import Memory
 from babelnet import BabelSynset, Language
 from babelnet.resources import WikipediaID, BabelSynsetID
+from babelnet.data.relation import BabelPointer
 from typing import Set, Dict, List
 
 class Definition:
@@ -77,13 +78,14 @@ class PrerequisiteMap:
 		words = [word for word in words if word not in self.model.Defaults.stop_words]
 		return ' '.join(words)
 
-	# TODO: Generate topic set based on relations, not glosses
 	def _generate_topic_set(self, synset: BabelSynset) -> 'Set[BabelSynsetID]':
-		topic_set = set()
-		for gloss in synset.glosses():
-			for token in gloss.token_ids:
-				topic_set.add(token.id)
-		return topic_set
+		# TODO: Switch to WIKI only relations?
+		relations = synset.outgoing_edges([
+			BabelPointer.ANY_HOLONYM,
+			BabelPointer.ANY_HYPONYM,
+			BabelPointer.TOPIC,
+		])
+		return {relation.id_target for relation in relations}
 
 	# TODO: get_prerequiste_relations no longer exists
 	def save(self, path: str) -> None:
