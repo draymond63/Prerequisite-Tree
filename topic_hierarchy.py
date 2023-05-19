@@ -1,7 +1,6 @@
-import numpy as np
 import pandas as pd
-from typing import Set, Iterable, Dict, Mapping, Tuple
 from tqdm import tqdm
+from typing import Set, Dict, Mapping, Tuple
 
 def get_child_tree(df: pd.DataFrame) -> Dict[str, set]:
     parents = df.groupby('category')['item'].apply(set)
@@ -11,7 +10,11 @@ def get_child_tree(df: pd.DataFrame) -> Dict[str, set]:
     return parents.to_dict()
 
 def get_parent_tree(df: pd.DataFrame) -> Dict[str, set]:
-    return df.groupby('item')['category'].apply(set).to_dict()
+    children = df.groupby('item')['category'].apply(set)
+    leafs = set(df['category'].unique()) - set(children.keys())
+    leafs = pd.Series(index=leafs).fillna("").apply(set)
+    children = pd.concat([children, leafs])
+    return children.to_dict()
 
 def get_category_depth(children: Dict[str, set], root = 'Contents') -> Dict[str, int]: # Main_topic_classifications
     depths = {category: None for category in children.keys()}

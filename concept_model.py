@@ -1,10 +1,13 @@
 import spacy
+import pandas as pd
 import babelnet as bn
 from joblib import Memory
 from babelnet import BabelSynset, Language
 from babelnet.resources import WikipediaID, BabelSynsetID
 from babelnet.data.relation import BabelPointer
-from typing import Set, Dict, List
+from typing import Set, Dict, List, Optional
+
+from topic_hierarchy import get_parent_tree
 
 class Definition:
 	def __init__(self, gloss: str, prereqs: Set[BabelSynsetID]) -> None:
@@ -32,25 +35,47 @@ class PrerequisiteMap:
 	memory = Memory("datasets/cache")
 	model = spacy.load('en_core_web_sm')
 	map: 'Dict[BabelSynsetID, Concept]'
+	category_tree: Dict[str, Set[str]]
 
 	def __init__(self) -> None:
 		self.map = dict()
 		self.lang = Language.EN
+		self.category_tree = self.init_categories()
+
+	@staticmethod
+	@memory.cache
+	def init_categories():
+		categorylinks = pd.read_csv('datasets/generated/valid_category_links.tsv', sep='\t')
+		return get_parent_tree(categorylinks)
 
 	def find_concept(self, name: str, wiki_category = None) -> 'Concept':
-		synset = self.find_synset(name, wiki_category)
+		synset = self.find_synset_wiki(name, wiki_category)
 		return self.get_concept(synset)
+	
+	@staticmethod
+	def _is_named_entity(synset) -> bool:
+		return synset.type != 'CONCEPT'
+
+	def find_synset_wiki(self, name: str, wiki_category = None) -> BabelSynset:
+		if wiki_category is None:
+			return bn.get_synset(WikipediaID(name, language=self.lang)) # TODO: Name is not an ID
+		synsets = bn.get_synsets(name, from_langs={self.lang}, synset_filters={self._is_named_entity})
+		if len(synsets) == 0:
+			raise Exception(f'No synsets found for {name}')
+		print(synsets)
+		distances = [self.distance_to_category(synset, wiki_category) for synset in synsets]
+		print(distances)
+		distances = {i: dist for i, dist in enumerate(distances) if dist is not None}
+		if len(distances) == 0:
+			raise Exception(f'No synsets found like {name} in category {wiki_category}')
+		print(distances)
+		best_index = min(distances, key=distances.get)
+		print(best_index)
+		return synsets[best_index]
 
 	@memory.cache
-	def find_synset(self, name: str, wiki_category = None) -> BabelSynset:
-		print('Running find_synset')
-		if wiki_category is None:
-			return bn.get_synset(WikipediaID(name, language=self.lang))
-		synsets = bn.get_synsets(name, from_langs={self.lang})
-		print(synsets)
-		for synset in synsets:
-			print(synset.categories(self.lang))
-			# TODO: Find the best synset based on the proximity of the given category to the synset's
+	def find_synset(self, babel_id: BabelSynsetID) -> BabelSynset:
+		return bn.get_synset(babel_id)
 
 	def get_concept(self, synset: BabelSynset) -> 'Concept':
 		name = synset.main_sense().lemma # TODO: Wrong
@@ -87,6 +112,27 @@ class PrerequisiteMap:
 		])
 		return {relation.id_target for relation in relations}
 
+	def parent_category_path(self, child: str, parent: str) -> Optional[List[str]]:
+		parents = self.category_tree.get(child, [])
+		if len(parents) == 0:
+			return None
+		if parent in parents:
+			return [parent]
+		for category in parents:
+			path = self.parent_category_path(category, parent)
+			if path is not None:
+				return [category, *path]
+
+	def distance_to_category(self, synset: BabelSynset, parent_category: str):
+		distances = []
+		for category in synset.categories(self.lang):
+			if category.value in self.category_tree:
+				path = self.parent_category_path(category.value, parent_category)
+				if path is not None:
+					distances.append(len(path))
+		if len(distances):
+			return min(distances)
+
 	# TODO: get_prerequiste_relations no longer exists
 	def save(self, path: str) -> None:
 		with open(path, 'w') as f:
@@ -97,4 +143,4 @@ class PrerequisiteMap:
 
 if __name__ == '__main__':
 	# BabelSynsetID('bn:03566112n')
-	PrerequisiteMap().find_concept('Control Theory', 'Mathematics')
+	print(PrerequisiteMap().find_concept('Control Theory', 'Mathematics'))
