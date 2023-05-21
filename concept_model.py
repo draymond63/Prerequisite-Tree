@@ -51,28 +51,6 @@ class PrerequisiteMap:
 	def find_concept(self, name: str, wiki_category = None) -> 'Concept':
 		synset = self.find_synset_wiki(name, wiki_category)
 		return self.get_concept(synset)
-	
-	@staticmethod
-	def _is_invalid_concept(synset: BabelSynset) -> bool:
-		# TODO: Ensure sysnet is_key_concept
-		return synset.type != 'CONCEPT'
-
-	def find_synset_wiki(self, name: str, wiki_category = None) -> BabelSynset:
-		if wiki_category is None:
-			return bn.get_synset(WikipediaID(name, language=self.lang)) # TODO: Name is not an ID
-		synsets = bn.get_synsets(name, from_langs={self.lang}, synset_filters={self._is_invalid_concept})
-		if len(synsets) == 0:
-			raise LookupError(f'No synsets found for {name}')
-		distances = [self.distance_to_category(synset, wiki_category) for synset in synsets]
-		distances = {i: dist for i, dist in enumerate(distances) if dist is not None}
-		if len(distances) == 0:
-			raise LookupError(f'No synsets found like {name} in category {wiki_category}')
-		best_index = min(distances, key=distances.get)
-		return synsets[best_index]
-
-	@memory.cache
-	def get_synset(self, babel_id: BabelSynsetID) -> BabelSynset:
-		return bn.get_synset(babel_id, to_langs={self.lang})
 
 	def get_concept(self, synset: BabelSynset) -> 'Concept':
 		name = synset.main_sense().lemma # TODO: Wrong
@@ -115,6 +93,33 @@ class PrerequisiteMap:
 		relations += synset.outgoing_edges(BabelPointer.TOPIC)
 		return {relation.id_target for relation in relations}
 
+	def find_synset_wiki(self, name: str, wiki_category = None) -> BabelSynset:
+		if wiki_category is None:
+			return bn.get_synset(WikipediaID(name, language=self.lang)) # TODO: Name is not an ID
+		synsets = bn.get_synsets(name, from_langs={self.lang}, synset_filters={self._is_invalid_concept})
+		if len(synsets) == 0:
+			raise LookupError(f'No synsets found for {name}')
+		distances = [self.distance_to_category(synset, wiki_category) for synset in synsets]
+		distances = {i: dist for i, dist in enumerate(distances) if dist is not None}
+		if len(distances) == 0:
+			raise LookupError(f'No synsets found like {name} in category {wiki_category}')
+		best_index = min(distances, key=distances.get)
+		return synsets[best_index]
+
+	@memory.cache
+	def get_synset(self, babel_id: BabelSynsetID) -> BabelSynset:
+		return bn.get_synset(babel_id, to_langs={self.lang})
+
+	def distance_to_category(self, synset: BabelSynset, parent_category: str):
+		distances = []
+		for category in synset.categories(self.lang):
+			if category.value in self.category_tree:
+				path = self.parent_category_path(category.value, parent_category)
+				if path is not None:
+					distances.append(len(path))
+		if len(distances):
+			return min(distances)
+
 	def parent_category_path(self, child: str, parent: str) -> Optional[List[str]]:
 		parents = self.category_tree.get(child, [])
 		if len(parents) == 0:
@@ -126,15 +131,10 @@ class PrerequisiteMap:
 			if path is not None:
 				return [category, *path]
 
-	def distance_to_category(self, synset: BabelSynset, parent_category: str):
-		distances = []
-		for category in synset.categories(self.lang):
-			if category.value in self.category_tree:
-				path = self.parent_category_path(category.value, parent_category)
-				if path is not None:
-					distances.append(len(path))
-		if len(distances):
-			return min(distances)
+	@staticmethod
+	def _is_invalid_concept(synset: BabelSynset) -> bool:
+		# TODO: Ensure sysnet is_key_concept
+		return synset.type != 'CONCEPT'
 
 	# TODO: get_prerequiste_relations no longer exists
 	def save(self, path: str) -> None:
