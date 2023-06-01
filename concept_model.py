@@ -67,7 +67,7 @@ class PrerequisiteMap:
 
 	def _generate_definitions(self, synset: BabelSynset, category: str) -> List[Definition]:
 		definitions = []
-		for gloss in synset.glosses():
+		for gloss in synset.glosses()[:1]:
 			prereqs = self._generate_prereqs(gloss.gloss, category)
 			prereqs -= set([synset.id])
 			definitions.append(Definition(gloss.gloss, prereqs))
