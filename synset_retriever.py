@@ -8,7 +8,6 @@ from typing import List, Optional
 from topic_hierarchy import get_parent_tree
 
 memory = Memory("datasets/cache")
-_language = Language.EN
 
 def _is_invalid_concept(synset: BabelSynset) -> bool:
 	# TODO: Ensure sysnet is_key_concept and is from Wikipedia?
@@ -19,10 +18,14 @@ def get_synset(babel_id: BabelSynsetID) -> BabelSynset:
 	print(f"Getting synset for '{babel_id}'...")
 	return bn.get_synset(babel_id)
 
+def id_to_name(babel_id: BabelSynsetID, lang=Language.EN) -> str:
+	synset = get_synset(babel_id)
+	return synset.main_sense(lang).full_lemma
+
 @memory.cache
-def search_synsets(name: str) -> List:
+def search_synsets(name: str, lang=Language.EN) -> List[BabelSynset]:
 	print(f"Searching synsets for '{name}'...")
-	return bn.get_synsets(name, from_langs={_language}, synset_filters={_is_invalid_concept})
+	return bn.get_synsets(name, from_langs={lang}, synset_filters={_is_invalid_concept})
 
 @memory.cache
 def _generate_parent_tree():
@@ -32,12 +35,13 @@ def _generate_parent_tree():
 
 
 class SynsetRetriever():
-	def __init__(self) -> None:
+	def __init__(self, language=Language.EN) -> None:
+		self.lang = language
 		self.category_tree = _generate_parent_tree()
 
 	def find_synset_wiki(self, name: str, wiki_category = None) -> Optional[BabelSynset]:
 		if wiki_category is None:
-			return bn.get_synset(WikipediaID(name, language=_language)) # TODO: Name is not an ID
+			return bn.get_synset(WikipediaID(name, language=self.lang)) # TODO: Name is not an ID
 		synsets = search_synsets(name)
 		if len(synsets) == 0:
 			raise LookupError(f'No synsets found for {name}')
@@ -50,7 +54,7 @@ class SynsetRetriever():
 
 	def distance_to_category(self, synset: BabelSynset, parent_category: str):
 		distances = []
-		for category in synset.categories(_language):
+		for category in synset.categories(self.lang):
 			if category.value in self.category_tree:
 				path = self.parent_category_path(category.value, parent_category)
 				if path is not None:

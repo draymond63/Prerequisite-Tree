@@ -4,13 +4,20 @@ from babelnet.resources import BabelSynsetID
 from babelnet.data.relation import BabelPointer
 from typing import Set, Dict, List, Optional
 
-from synset_retriever import SynsetRetriever
+from synset_retriever import SynsetRetriever, id_to_name
 
 
 class Definition:
 	def __init__(self, gloss: str, prereqs: Set[BabelSynsetID]) -> None:
 		self.gloss = gloss
 		self.prereqs = prereqs
+
+	def __str__(self) -> str:
+		ret = f'{self.gloss}\n'
+		ret += '\tPrerequisites:\n'
+		for babel_id in self.prereqs:
+			ret += f'\t{id_to_name(babel_id)}\n'
+		return ret
 
 	def __repr__(self) -> str:
 		return f'Definition: {self.gloss}'
@@ -30,11 +37,11 @@ class Concept:
 	def __str__(self):
 		ret = f'Concept: {self.name}\n'
 		ret += 'Topic Set:\n'
-		ret += '\n'.join([f'\t{topic}' for topic in self.topic_set]) # TODO: Needs concept name, not ID
-		ret += '\nDefinitions:'
+		for babel_id in self.topic_set:
+			ret += f'\t{id_to_name(babel_id)}\n'
+		ret += 'Definitions:\n'
 		for i, definition in enumerate(self.definitions):
-			ret += f'\n{i + 1}. {definition.gloss}\n'
-			ret += '\n'.join([f'\t{prereq}' for prereq in definition.prereqs]) # TODO: Needs concept name, not ID
+			ret += f'{i + 1}. {definition}\n'
 		return ret
 
 	def __repr__(self) -> str:
@@ -67,7 +74,7 @@ class PrerequisiteMap:
 
 	def _generate_definitions(self, synset: BabelSynset, category: str) -> List[Definition]:
 		definitions = []
-		for gloss in synset.glosses()[:1]:
+		for gloss in synset.glosses():
 			prereqs = self._generate_prereqs(gloss.gloss, category)
 			prereqs -= set([synset.id])
 			definitions.append(Definition(gloss.gloss, prereqs))
@@ -99,7 +106,7 @@ class PrerequisiteMap:
 	def clean_noun(self, text: str) -> str:
 		words = text.split(' ')
 		words = [word for word in words if word not in self.model.Defaults.stop_words]
-		return ' '.join(words)
+		return ' '.join(words).lower()
 
 	@staticmethod
 	def _generate_topic_set(synset: BabelSynset) -> 'Set[BabelSynsetID]':
