@@ -4,7 +4,7 @@ from babelnet.resources import BabelSynsetID
 from babelnet.data.relation import BabelPointer
 from typing import Set, Dict, List, Optional
 
-from synset_retriever import SynsetRetriever, id_to_name
+from synset_retriever import SynsetRetriever, id_to_name, get_synset
 
 
 class Definition:
@@ -23,11 +23,12 @@ class Definition:
 		return f'Definition: {self.gloss}'
 
 class Concept:
-	def __init__(self, name: str, babel_id: BabelSynsetID, topic_set: Set[BabelSynsetID], definitions: List[Definition]) -> None:
+	def __init__(self, name: str, babel_id: BabelSynsetID, topic_set: Set[BabelSynsetID], definitions: List[Definition], principle_category: str) -> None:
 		self.name = name
 		self.babel_id = babel_id
 		self.topic_set = topic_set
 		self.definitions = definitions
+		self.principle_category = principle_category
 
 	@property
 	def glosses(self):
@@ -68,13 +69,14 @@ class PrerequisiteMap:
 		category = wiki_category if wiki_category else synset.categories[0].name # TODO: Better default category selection
 		definitions = self._generate_definitions(synset, category)
 		topic_set = self._generate_topic_set(synset)
-		concept = Concept(name, synset.id, topic_set, definitions)
+		concept = Concept(name, synset.id, topic_set, definitions, wiki_category)
 		self.map[concept.babel_id] = concept
+		# TODO: New concept must ensure DAG
 		return concept
 
 	def _generate_definitions(self, synset: BabelSynset, category: str) -> List[Definition]:
 		definitions = []
-		for gloss in synset.glosses():
+		for gloss in synset.glosses()[:1]:
 			prereqs = self._generate_prereqs(gloss.gloss, category)
 			prereqs -= set([synset.id])
 			definitions.append(Definition(gloss.gloss, prereqs))
@@ -89,12 +91,18 @@ class PrerequisiteMap:
 		print("Generating prereqs for definition:", definition)
 		for noun in parsed.noun_chunks:
 			cleaned_noun = self.clean_noun(noun.text)
+			if cleaned_noun == '':
+				continue
 			print(f"Searching for prerequisite synset '{cleaned_noun}'")
 			try:
 				synset_candidate = self.search.find_synset_wiki(cleaned_noun, wiki_category)
 			except LookupError as e:
-				print(f"{e}. Ignoring wiki category {wiki_category}")
-				synset_candidate = self.search.find_synset_wiki(cleaned_noun)
+				try:
+					print(f"{e}. Ignoring wiki category {wiki_category}")
+					synset_candidate = self.search.find_synset_wiki(cleaned_noun)
+				except LookupError as final_e:
+					print(f"{final_e}. Ignoring {cleaned_noun}")
+					continue
 			# TODO: Wasteful to just use the id
 			if synset_candidate is not None:
 				print(f"Prerequisite found: '{synset_candidate.main_sense().lemma}'")
@@ -109,21 +117,41 @@ class PrerequisiteMap:
 		return ' '.join(words).lower()
 
 	@staticmethod
-	def _generate_topic_set(synset: BabelSynset) -> 'Set[BabelSynsetID]':
+	def _generate_topic_set(synset: BabelSynset) -> Set[BabelSynsetID]:
 		# TODO: Switch to WIKI only relations? Are these the correct relations?
 		relations = synset.outgoing_edges(BabelPointer.ANY_HOLONYM)
 		relations += synset.outgoing_edges(BabelPointer.ANY_HYPONYM)
 		relations += synset.outgoing_edges(BabelPointer.TOPIC)
 		return {relation.id_target for relation in relations}
 
-	# TODO: Save map to a standard format
+	# TODO: Move to an interface?
+	def print_all_prereqs(self, concept: Concept):
+		print(f'Prerequisites for {concept.name}:')
+		for i, definition in enumerate(concept.definitions, 1):
+			print(f'{i}. {definition}')
+			for babel_id in definition.prereqs:
+				do_learn = input(f'Learn about {id_to_name(babel_id)}? (y/n): ')
+				if do_learn == 'y':
+					self.print_all_prereqs(self.get_concept(get_synset(babel_id), concept.principle_category))
+			keep_going = input(f"Continue with prereqs of {concept.name}'s definition {i}? (y/n): ")
+			if keep_going != 'y':
+				return
+
+	# TODO: Save map to a standard format. Duck DB?
 	def save(self, path: str) -> None:
 		with open(path, 'w') as f:
 			for concept in self.map.values():
 				...
-
+				# Table Relations:
+					# Definitions: concept_id, gloss_id
+					# Prereqs: gloss_id, prereq_id
+					# Topic Set: concept_id, child_id
+					# Naming (Optional): concept_id, concept_name
+					# Definitions: gloss_id, gloss
+	
 
 if __name__ == '__main__':
 	map = PrerequisiteMap()
 	concept = map.find_concept('Control Theory', 'Mathematics')
 	print(concept)
+	map.print_all_prereqs(concept)

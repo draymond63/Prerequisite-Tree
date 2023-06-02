@@ -24,6 +24,8 @@ def id_to_name(babel_id: BabelSynsetID, lang=Language.EN) -> str:
 
 @memory.cache
 def search_synsets(name: str, lang=Language.EN) -> List[BabelSynset]:
+	if name == '':
+		raise ValueError("Cannot search for empty string")
 	print(f"Searching synsets for '{name}'...")
 	return bn.get_synsets(name, from_langs={lang}, synset_filters={_is_invalid_concept})
 
@@ -40,15 +42,16 @@ class SynsetRetriever():
 		self.category_tree = _generate_parent_tree()
 
 	def find_synset_wiki(self, name: str, wiki_category = None) -> Optional[BabelSynset]:
-		if wiki_category is None:
-			return bn.get_synset(WikipediaID(name, language=self.lang)) # TODO: Name is not an ID
 		synsets = search_synsets(name)
 		if len(synsets) == 0:
-			raise LookupError(f'No synsets found for {name}')
+			raise LookupError(f"No synsets found for '{name}'")
+		if wiki_category is None:
+			return synsets[0]
+		# TODO: Why are most synsets distance 2 away from 'Mathematics'? What's the path?
 		distances = [self.distance_to_category(synset, wiki_category) for synset in synsets]
 		distances = {i: dist for i, dist in enumerate(distances) if dist is not None}
 		if len(distances) == 0:
-			raise LookupError(f'No synsets found like {name} in category {wiki_category}')
+			raise LookupError(f"No synsets found like '{name}' in category {wiki_category}")
 		best_index = min(distances, key=distances.get) # TODO: Handle ties (e.g. "control")
 		return synsets[best_index]
 
