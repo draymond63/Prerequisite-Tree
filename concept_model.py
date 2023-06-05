@@ -4,7 +4,7 @@ from babelnet.resources import BabelSynsetID
 from babelnet.data.relation import BabelPointer
 from typing import Set, Dict, List, Optional
 
-from synset_retriever import SynsetRetriever, id_to_name, get_synset
+from synset_retriever import SynsetRetriever, id_to_name, get_synset, NoSearchResultsError
 
 
 class Definition:
@@ -23,12 +23,11 @@ class Definition:
 		return f'Definition: {self.gloss}'
 
 class Concept:
-	def __init__(self, name: str, babel_id: BabelSynsetID, topic_set: Set[BabelSynsetID], definitions: List[Definition], principle_category: str) -> None:
+	def __init__(self, name: str, babel_id: BabelSynsetID, topic_set: Set[BabelSynsetID], definitions: List[Definition]) -> None:
 		self.name = name
 		self.babel_id = babel_id
 		self.topic_set = topic_set
 		self.definitions = definitions
-		self.principle_category = principle_category
 
 	@property
 	def glosses(self):
@@ -58,31 +57,36 @@ class PrerequisiteMap:
 		self.map = dict()
 		self.search = SynsetRetriever()
 
-	def find_concept(self, name: str, wiki_category = None) -> Concept:
-		synset = self.search.find_synset_wiki(name, wiki_category)
-		return self.get_concept(synset, wiki_category)
+	def find_concept(self, name: str, wiki_category: str) -> Concept:
+		synsets = self.search.find_synset_in_category(name, wiki_category)
+		if len(synsets) == 0:
+			raise Exception(f'No synsets found for {name} in category {wiki_category}')
+		if len(synsets) > 1:
+			print(f'Multiple synsets found for {name} in category {wiki_category}. Using first. Possible: {synsets}')
+		synset = synsets[0]
+		return self.get_concept(synset)
 
-	def get_concept(self, synset: BabelSynset, wiki_category = None) -> Concept:
+	def get_concept(self, synset: BabelSynset) -> Concept:
 		if synset.id in self.map:
 			return self.map[synset.id]
 		name = synset.main_sense().lemma # TODO: Wrong
-		category = wiki_category if wiki_category else synset.categories[0].name # TODO: Better default category selection
-		definitions = self._generate_definitions(synset, category)
+		definitions = self._generate_definitions(synset)
 		topic_set = self._generate_topic_set(synset)
-		concept = Concept(name, synset.id, topic_set, definitions, wiki_category)
+		concept = Concept(name, synset.id, topic_set, definitions)
 		self.map[concept.babel_id] = concept
 		# TODO: New concept must ensure DAG
 		return concept
 
-	def _generate_definitions(self, synset: BabelSynset, category: str) -> List[Definition]:
+	def _generate_definitions(self, synset: BabelSynset) -> List[Definition]:
 		definitions = []
+		categories = self.search.get_categories(synset)
 		for gloss in synset.glosses()[:1]:
-			prereqs = self._generate_prereqs(gloss.gloss, category)
+			prereqs = self._generate_prereqs(gloss.gloss, categories)
 			prereqs -= set([synset.id])
 			definitions.append(Definition(gloss.gloss, prereqs))
 		return definitions
 
-	def _generate_prereqs(self, definition: str, wiki_category: Optional[str] = None) -> Set[BabelSynsetID]:
+	def _generate_prereqs(self, definition: str, parent_categories: List[str]) -> Set[BabelSynsetID]:
 		# TODO: Extract main phrase of sentence
 		# TODO: For each noun chunk, find all possible synsets
 		# TODO: Determine best synset for each noun chunk based on categorical similarity to original synset
@@ -95,18 +99,11 @@ class PrerequisiteMap:
 				continue
 			print(f"Searching for prerequisite synset '{cleaned_noun}'")
 			try:
-				synset_candidate = self.search.find_synset_wiki(cleaned_noun, wiki_category)
-			except LookupError as e:
-				try:
-					print(f"{e}. Ignoring wiki category {wiki_category}")
-					synset_candidate = self.search.find_synset_wiki(cleaned_noun)
-				except LookupError as final_e:
-					print(f"{final_e}. Ignoring {cleaned_noun}")
-					continue
-			# TODO: Wasteful to just use the id
-			if synset_candidate is not None:
+				synset_candidate = self.search.find_synset_like(cleaned_noun, parent_categories)
 				print(f"Prerequisite found: '{synset_candidate.main_sense().lemma}'")
 				prereqs.add(synset_candidate.id)
+			except NoSearchResultsError:
+				print(f"No results for {cleaned_noun}. Ignoring")
 		return prereqs
 
 	# TODO: Find spacy way of dropping stop words
@@ -132,8 +129,8 @@ class PrerequisiteMap:
 			for babel_id in definition.prereqs:
 				do_learn = input(f'Learn about {id_to_name(babel_id)}? (y/n): ')
 				if do_learn == 'y':
-					self.print_all_prereqs(self.get_concept(get_synset(babel_id), concept.principle_category))
-			keep_going = input(f"Continue with prereqs of {concept.name}'s definition {i}? (y/n): ")
+					self.print_all_prereqs(self.get_concept(get_synset(babel_id)))
+			keep_going = input(f"Continue to next definition of {concept.name} ({i + 1}/{len(concept.definitions)})? (y/n): ")
 			if keep_going != 'y':
 				return
 
