@@ -7,6 +7,7 @@ from typing import Set, Dict, List
 
 from synset_retriever import SynsetRetriever, id_to_name, get_synset, NoSearchResultsError
 
+
 @dataclass
 class Definition:
 	gloss: str
@@ -21,6 +22,7 @@ class Definition:
 
 	def __repr__(self) -> str:
 		return f'Definition: {self.gloss}'
+
 
 @dataclass
 class Concept:

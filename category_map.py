@@ -1,4 +1,3 @@
-import itertools
 from joblib import Memory
 from typing import Optional, List
 
@@ -63,7 +62,6 @@ class CategoryMap:
 
 
 if __name__ == "__main__":
-	# print(CategoryMap().categorical_distance(cat1, cat2))
 	management = ['Business_terms', 'Wikipedia_articles_incorporating_a_citation_from_the_1911_Encyclopaedia_Britannica_with_Wikisource_reference', 'Control_theory', 'Management', 'All_articles_with_peacock_terms', 'All_articles_with_style_issues', 'Articles_with_multiple_maintenance_issues', 'Control_(social_and_political)', 'All_articles_needing_additional_references']
 	optimal_controls = ['Applied_mathematics_stubs', 'Control_theory']
 	control_theory = ['Use_mdy_dates_from_July_2016', 'Computer_engineering', 'Articles_with_short_description', 'Control_theory', 'Control_engineering', 'Cybernetics']
