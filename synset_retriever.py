@@ -1,16 +1,14 @@
 import babelnet as bn
 from joblib import Memory
+from babelnet.sense import BabelSense
 from babelnet import BabelSynset, Language
 from babelnet.resources import BabelSynsetID
+from babelnet.data.source import BabelSenseSource
 from typing import List, Optional
 
 from category_map import CategoryMap
 
 memory = Memory("datasets/cache")
-
-def _is_invalid_concept(synset: BabelSynset) -> bool:
-	# TODO: Ensure sysnet is_key_concept and is from Wikipedia?
-	return synset.type != 'CONCEPT'
 
 @memory.cache
 def get_synset(babel_id: BabelSynsetID) -> BabelSynset:
@@ -21,15 +19,21 @@ def id_to_name(babel_id: BabelSynsetID, lang=Language.EN) -> str:
 	synset = get_synset(babel_id)
 	return synset.main_sense(lang).full_lemma
 
+def _is_invalid_concept(synset: BabelSynset) -> bool:
+	wordnet_senses = synset.senses(source=BabelSenseSource.WN)
+	return synset.type != 'CONCEPT' or len(wordnet_senses)
+
 @memory.cache
 def search_synsets(name: str, lang=Language.EN) -> List[BabelSynset]:
 	if name == '':
 		raise ValueError("Cannot search for empty string")
 	print(f"Searching synsets for '{name}'...")
-	return bn.get_synsets(name, from_langs={lang}, synset_filters={_is_invalid_concept})
+	return bn.get_synsets(name, from_langs={lang}, sources=[BabelSenseSource.WIKI], synset_filters={_is_invalid_concept})
+
 
 class NoSearchResultsError(ValueError):
-    pass
+    """No search results found"""
+
 
 class SynsetRetriever():
 	def __init__(self, language=Language.EN) -> None:
@@ -37,7 +41,7 @@ class SynsetRetriever():
 		self.category_map = CategoryMap()
 
 	def find_synset_like(self, name: str, categories: List[str]) -> BabelSynset:
-		print("Finding synset like", name, "with categories", categories)
+		print(f"Finding synset like '{name}' with categories {categories}")
 		synsets = search_synsets(name)
 		if len(synsets) == 0:
 			raise NoSearchResultsError(f"No synsets found for '{name}'")
@@ -51,12 +55,18 @@ class SynsetRetriever():
 				best_commonality = commonality
 		if best_synset is None:
 			raise ValueError(f"No synsets found for '{name}' with categories {categories}.\nCandidates: {synsets}")
+		if len(best_synset.senses(source=BabelSenseSource.WN)):
+			raise ValueError(f"Synset '{best_synset}' is a WordNet synset, which should've been filtered out")
+		# TODO: Set minimum commonality threshold
+		print(f"Found synset '{best_synset}' with categories {self.get_categories(best_synset)} (score = {best_commonality})")
 		return best_synset
 	
-	@staticmethod
-	def get_categories(synset: BabelSynset) -> List[str]:
-		return [category.value for category in synset.categories(Language.EN)]
-	
+	def get_categories(self, synset: BabelSynset) -> List[str]:
+		return [category.value for category in synset.categories(Language.EN) if category.value in self.category_map.categories]
+
+	def get_wiki_sense(self, synset: BabelSynset) -> BabelSense:
+		return synset.senses(language=self.lang, source=BabelSenseSource.WIKI)[0]
+
 	# TODO: Remove? Could be replaced by find_synset_like
 	def find_synset_in_category(self, name: str, wiki_category: str) -> List[BabelSynset]:
 		synsets = search_synsets(name)
@@ -75,7 +85,7 @@ class SynsetRetriever():
 		for category in synset.categories(self.lang):
 			category_str = category.value
 			if category_str in self.category_map.categories:
-				path = self.category_map.parent_category_path(category_str, parent_category)
+				path = self.category_map.category_path(category_str, parent_category)
 				if path is not None:
 					possible_paths.append([category_str, *path])
 		if len(possible_paths):

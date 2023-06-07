@@ -2,32 +2,33 @@ import spacy
 from babelnet import BabelSynset
 from babelnet.resources import BabelSynsetID
 from babelnet.data.relation import BabelPointer
-from typing import Set, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Set, Dict, List
 
 from synset_retriever import SynsetRetriever, id_to_name, get_synset, NoSearchResultsError
 
-
+@dataclass
 class Definition:
-	def __init__(self, gloss: str, prereqs: Set[BabelSynsetID]) -> None:
-		self.gloss = gloss
-		self.prereqs = prereqs
+	gloss: str
+	prereqs: Set[BabelSynsetID]
 
 	def __str__(self) -> str:
 		ret = f'{self.gloss}\n'
 		ret += '\tPrerequisites:\n'
 		for babel_id in self.prereqs:
-			ret += f'\t{id_to_name(babel_id)}\n'
+			ret += f'\t{id_to_name(babel_id)} ({babel_id})\n'
 		return ret
 
 	def __repr__(self) -> str:
 		return f'Definition: {self.gloss}'
 
+@dataclass
 class Concept:
-	def __init__(self, name: str, babel_id: BabelSynsetID, topic_set: Set[BabelSynsetID], definitions: List[Definition]) -> None:
-		self.name = name
-		self.babel_id = babel_id
-		self.topic_set = topic_set
-		self.definitions = definitions
+	name: str
+	babel_id: BabelSynsetID
+	topic_set: Set[BabelSynsetID]
+	definitions: List[Definition]
+	wiki_id: str
 
 	@property
 	def glosses(self):
@@ -70,9 +71,10 @@ class PrerequisiteMap:
 		if synset.id in self.map:
 			return self.map[synset.id]
 		name = synset.main_sense().lemma # TODO: Wrong
+		wiki_id = self.search.get_wiki_sense(synset).full_lemma
 		definitions = self._generate_definitions(synset)
 		topic_set = self._generate_topic_set(synset)
-		concept = Concept(name, synset.id, topic_set, definitions)
+		concept = Concept(name, synset.id, topic_set, definitions, wiki_id)
 		self.map[concept.babel_id] = concept
 		# TODO: New concept must ensure DAG
 		return concept
@@ -97,7 +99,6 @@ class PrerequisiteMap:
 			cleaned_noun = self.clean_noun(noun.text)
 			if cleaned_noun == '':
 				continue
-			print(f"Searching for prerequisite synset '{cleaned_noun}'")
 			try:
 				synset_candidate = self.search.find_synset_like(cleaned_noun, parent_categories)
 				print(f"Prerequisite found: '{synset_candidate.main_sense().lemma}'")
@@ -130,9 +131,10 @@ class PrerequisiteMap:
 				do_learn = input(f'Learn about {id_to_name(babel_id)}? (y/n): ')
 				if do_learn == 'y':
 					self.print_all_prereqs(self.get_concept(get_synset(babel_id)))
-			keep_going = input(f"Continue to next definition of {concept.name} ({i + 1}/{len(concept.definitions)})? (y/n): ")
-			if keep_going != 'y':
-				return
+			if i < len(concept.definitions):
+				keep_going = input(f"Continue to next definition of {concept.name} ({i}/{len(concept.definitions)})? (y/n): ")
+				if keep_going != 'y':
+					return
 
 	# TODO: Save map to a standard format. Duck DB?
 	def save(self, path: str) -> None:

@@ -35,8 +35,8 @@ class CategoryMap:
 		return total
 
 	def categorical_distance(self, cat1: str, cat2: str) -> int:
-		path1 = self.parent_category_path(cat1, self.root)
-		path2 = self.parent_category_path(cat2, self.root)
+		path1 = self.category_path(cat1, self.root)
+		path2 = self.category_path(cat2, self.root)
 		if path1 is None or path2 is None:
 			raise ValueError(f"Category not connected to root: {cat1} & {cat2} -> {self.root}")
 		path1 = [cat1, *path1]
@@ -48,16 +48,16 @@ class CategoryMap:
 		raise ValueError(f"Categories not connected, but this should be impossible\nPaths:{path1}\n{path2})")
 	
 	def category_in_root(self, category: str) -> bool:
-		return self.parent_category_path(category, self.root) is not None
+		return self.category_path(category, self.root) is not None
 
-	def parent_category_path(self, child: str, parent: str) -> Optional[List[str]]:
+	def category_path(self, child: str, parent: str) -> Optional[List[str]]:
 		parents = self.categories.get(child, [])
 		if len(parents) == 0:
 			return None
 		if parent in parents:
 			return [parent]
 		for category in parents:
-			path = self.parent_category_path(category, parent)
+			path = self.category_path(category, parent)
 			if path is not None:
 				return [category, *path]
 
