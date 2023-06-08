@@ -1,3 +1,4 @@
+import numpy as np
 from joblib import Memory
 from typing import Optional, List
 
@@ -25,13 +26,14 @@ class CategoryMap:
 		valid_cats2 = [cat for cat in category_list2 if self.category_in_root(cat)]
 		if len(valid_cats1) == 0 or len(valid_cats2) == 0:
 			return 0
-		total = 0
-		for cat1 in valid_cats1:
-			distances = [self.categorical_distance(cat1, cat2) for cat2 in valid_cats2]
-			if len(distances):
-				total += 1 / min(distances)
-		total /= len(valid_cats1)
-		return total
+		distances = np.zeros((len(valid_cats1), len(valid_cats2)))
+		for i, cat1 in enumerate(valid_cats1):
+			for j, cat2 in enumerate(valid_cats2):
+				distances[i, j] = self.categorical_distance(cat1, cat2)
+		# ? Use minimum values to include all axis, not just minimum of both axes (then divide by longer list length)
+		# ? Would this be better?
+		min_distances = np.min(distances, axis=0).tolist() + np.min(distances, axis=1).tolist()
+		return 1 / np.average(min_distances)
 
 	def categorical_distance(self, cat1: str, cat2: str) -> int:
 		path1 = self.category_path(cat1, self.root)
@@ -45,7 +47,7 @@ class CategoryMap:
 				if c1 == c2:
 					return i1 + i2 + 1
 		raise ValueError(f"Categories not connected, but this should be impossible\nPaths:{path1}\n{path2})")
-	
+
 	def category_in_root(self, category: str) -> bool:
 		return self.category_path(category, self.root) is not None
 
@@ -66,7 +68,7 @@ if __name__ == "__main__":
 	optimal_controls = ['Applied_mathematics_stubs', 'Control_theory']
 	control_theory = ['Use_mdy_dates_from_July_2016', 'Computer_engineering', 'Articles_with_short_description', 'Control_theory', 'Control_engineering', 'Cybernetics']
 	mapper = CategoryMap()
-	print('management, optimal_controls:', mapper.categorical_commonality(management, optimal_controls))
-	print('management, control_theory:', mapper.categorical_commonality(management, control_theory))
-	print('optimal_controls, control_theory:', mapper.categorical_commonality(optimal_controls, control_theory))
+	print('management, optimal_controls:', mapper.categorical_commonality(management, optimal_controls), mapper.categorical_commonality(optimal_controls, management))
+	print('management, control_theory:', mapper.categorical_commonality(management, control_theory), mapper.categorical_commonality(control_theory, management))
+	print('optimal_controls, control_theory:', mapper.categorical_commonality(optimal_controls, control_theory), mapper.categorical_commonality(control_theory, optimal_controls))
 	print('control_theory, control_theory:', mapper.categorical_commonality(control_theory, control_theory))
