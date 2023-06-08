@@ -10,7 +10,7 @@ from category_map import CategoryMap
 
 memory = Memory("datasets/cache")
 
-@memory.cache
+@memory.cache(verbose=0)
 def get_synset(babel_id: BabelSynsetID) -> BabelSynset:
 	print(f"Getting synset for '{babel_id}'...")
 	return bn.get_synset(babel_id)
@@ -20,20 +20,21 @@ def id_to_name(babel_id: BabelSynsetID, lang=Language.EN) -> str:
 	return synset.main_sense(lang).full_lemma
 
 def _is_invalid_concept(synset: BabelSynset) -> bool:
-	wordnet_senses = synset.senses(source=BabelSenseSource.WN)
-	return synset.type != 'CONCEPT' or len(wordnet_senses)
+	return synset.type != 'CONCEPT' or not len(synset.senses(source=BabelSenseSource.WIKI))
 
-@memory.cache
+# @memory.cache(verbose=0)
 def search_synsets(name: str, lang=Language.EN) -> List[BabelSynset]:
 	if name == '':
 		raise ValueError("Cannot search for empty string")
 	print(f"Searching synsets for '{name}'...")
-	return bn.get_synsets(name, from_langs={lang}, sources=[BabelSenseSource.WIKI], synset_filters={_is_invalid_concept})
+	return bn.get_synsets(name, from_langs={lang}, sources=[BabelSenseSource.WIKI], synset_filters=(_is_invalid_concept,))
 
 
 class NoSearchResultsError(ValueError):
     """No search results found"""
 
+class CommonWordError(ValueError):
+	"""Search term is a common word"""
 
 class SynsetRetriever():
 	def __init__(self, language=Language.EN) -> None:
@@ -42,13 +43,17 @@ class SynsetRetriever():
 
 	def find_synset_like(self, name: str, categories: List[str]) -> BabelSynset:
 		print(f"Finding synset like '{name}' with categories {categories}")
-		synsets = search_synsets(name)
+		synsets = search_synsets(name, self.lang)
 		if len(synsets) == 0:
 			raise NoSearchResultsError(f"No synsets found for '{name}'")
 		best_synset = None
 		best_commonality = 0
+		print(f"Found {len(synsets)} synsets: {[(self.get_name(synset), synset.id) for synset in synsets]}")
 		for candidate in synsets:
 			candidate_categories = self.get_categories(candidate)
+			if len(candidate_categories) == 0:
+				print(f"WARNING: Synset '{self.get_name(candidate)}' has no categories")
+				continue
 			commonality = self.category_map.categorical_commonality(candidate_categories, categories)
 			if commonality > best_commonality:
 				best_synset = candidate
@@ -56,20 +61,23 @@ class SynsetRetriever():
 		if best_synset is None:
 			raise ValueError(f"No synsets found for '{name}' with categories {categories}.\nCandidates: {synsets}")
 		if len(best_synset.senses(source=BabelSenseSource.WN)):
-			raise ValueError(f"Synset '{best_synset}' is a WordNet synset, which should've been filtered out")
+			raise CommonWordError(f"Synset '{self.get_name(best_synset)}' has wordnet senses, assuming {name} is a common word")
 		# TODO: Set minimum commonality threshold
 		print(f"Found synset '{best_synset}' with categories {self.get_categories(best_synset)} (score = {best_commonality})")
 		return best_synset
 	
 	def get_categories(self, synset: BabelSynset) -> List[str]:
-		return [category.value for category in synset.categories(Language.EN) if category.value in self.category_map.categories]
+		return [category.value for category in synset.categories(self.lang) if category.value in self.category_map.categories]
+
+	def get_name(self, synset: BabelSynset) -> str:
+		return self.get_wiki_sense(synset).full_lemma
 
 	def get_wiki_sense(self, synset: BabelSynset) -> BabelSense:
 		return synset.senses(language=self.lang, source=BabelSenseSource.WIKI)[0]
 
 	# TODO: Remove? Could be replaced by find_synset_like
 	def find_synset_in_category(self, name: str, wiki_category: str) -> List[BabelSynset]:
-		synsets = search_synsets(name)
+		synsets = search_synsets(name, self.lang)
 		if len(synsets) == 0:
 			return []
 		paths = [self.synset_category_path(synset, wiki_category) for synset in synsets]

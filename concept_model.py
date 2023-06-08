@@ -5,7 +5,7 @@ from babelnet.data.relation import BabelPointer
 from dataclasses import dataclass
 from typing import Set, Dict, List
 
-from synset_retriever import SynsetRetriever, id_to_name, get_synset, NoSearchResultsError
+from synset_retriever import SynsetRetriever, id_to_name, get_synset, NoSearchResultsError, CommonWordError
 
 
 @dataclass
@@ -30,7 +30,6 @@ class Concept:
 	babel_id: BabelSynsetID
 	topic_set: Set[BabelSynsetID]
 	definitions: List[Definition]
-	wiki_id: str
 
 	@property
 	def glosses(self):
@@ -72,11 +71,10 @@ class PrerequisiteMap:
 	def get_concept(self, synset: BabelSynset) -> Concept:
 		if synset.id in self.map:
 			return self.map[synset.id]
-		name = synset.main_sense().lemma # TODO: Wrong
-		wiki_id = self.search.get_wiki_sense(synset).full_lemma
+		name = self.search.get_name(synset)
 		definitions = self._generate_definitions(synset)
 		topic_set = self._generate_topic_set(synset)
-		concept = Concept(name, synset.id, topic_set, definitions, wiki_id)
+		concept = Concept(name, synset.id, topic_set, definitions)
 		self.map[concept.babel_id] = concept
 		# TODO: New concept must ensure DAG
 		return concept
@@ -84,7 +82,7 @@ class PrerequisiteMap:
 	def _generate_definitions(self, synset: BabelSynset) -> List[Definition]:
 		definitions = []
 		categories = self.search.get_categories(synset)
-		for gloss in synset.glosses()[:1]:
+		for gloss in synset.glosses()[5:]: # TODO: Limited to 1 definition for testing
 			prereqs = self._generate_prereqs(gloss.gloss, categories)
 			prereqs -= set([synset.id])
 			definitions.append(Definition(gloss.gloss, prereqs))
@@ -92,8 +90,6 @@ class PrerequisiteMap:
 
 	def _generate_prereqs(self, definition: str, parent_categories: List[str]) -> Set[BabelSynsetID]:
 		# TODO: Extract main phrase of sentence
-		# TODO: For each noun chunk, find all possible synsets
-		# TODO: Determine best synset for each noun chunk based on categorical similarity to original synset
 		parsed = self.model(definition)
 		prereqs = set()
 		print("Generating prereqs for definition:", definition)
@@ -107,6 +103,8 @@ class PrerequisiteMap:
 				prereqs.add(synset_candidate.id)
 			except NoSearchResultsError:
 				print(f"No results for {cleaned_noun}. Ignoring")
+			except CommonWordError as e:
+				print(e)
 		return prereqs
 
 	# TODO: Find spacy way of dropping stop words
@@ -119,6 +117,7 @@ class PrerequisiteMap:
 	@staticmethod
 	def _generate_topic_set(synset: BabelSynset) -> Set[BabelSynsetID]:
 		# TODO: Switch to WIKI only relations? Are these the correct relations?
+		# TODO: Search Wikipedia for clickthrough articles
 		relations = synset.outgoing_edges(BabelPointer.ANY_HOLONYM)
 		relations += synset.outgoing_edges(BabelPointer.ANY_HYPONYM)
 		relations += synset.outgoing_edges(BabelPointer.TOPIC)
@@ -155,4 +154,5 @@ if __name__ == '__main__':
 	map = PrerequisiteMap()
 	concept = map.find_concept('Control Theory', 'Mathematics')
 	print(concept)
-	map.print_all_prereqs(concept)
+	# map.print_all_prereqs(concept)
+	

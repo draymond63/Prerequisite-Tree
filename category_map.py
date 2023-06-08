@@ -33,7 +33,7 @@ class CategoryMap:
 		# ? Use minimum values to include all axis, not just minimum of both axes (then divide by longer list length)
 		# ? Would this be better?
 		min_distances = np.min(distances, axis=0).tolist() + np.min(distances, axis=1).tolist()
-		return 1 / np.average(min_distances)
+		return 1 / np.average(min_distances) # ? Square root to scales the values to be more reasonable (still between 0 and 1)
 
 	def categorical_distance(self, cat1: str, cat2: str) -> int:
 		path1 = self.category_path(cat1, self.root)
@@ -68,7 +68,7 @@ if __name__ == "__main__":
 	optimal_controls = ['Applied_mathematics_stubs', 'Control_theory']
 	control_theory = ['Use_mdy_dates_from_July_2016', 'Computer_engineering', 'Articles_with_short_description', 'Control_theory', 'Control_engineering', 'Cybernetics']
 	mapper = CategoryMap()
-	print('management, optimal_controls:', mapper.categorical_commonality(management, optimal_controls), mapper.categorical_commonality(optimal_controls, management))
-	print('management, control_theory:', mapper.categorical_commonality(management, control_theory), mapper.categorical_commonality(control_theory, management))
-	print('optimal_controls, control_theory:', mapper.categorical_commonality(optimal_controls, control_theory), mapper.categorical_commonality(control_theory, optimal_controls))
+	print('management, optimal_controls:', mapper.categorical_commonality(management, optimal_controls))
+	print('management, control_theory:', mapper.categorical_commonality(management, control_theory))
+	print('optimal_controls, control_theory:', mapper.categorical_commonality(optimal_controls, control_theory))
 	print('control_theory, control_theory:', mapper.categorical_commonality(control_theory, control_theory))
