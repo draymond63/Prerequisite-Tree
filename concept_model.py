@@ -1,4 +1,6 @@
 import spacy
+import logging
+from logging import getLogger
 from babelnet import BabelSynset
 from babelnet.resources import BabelSynsetID
 from babelnet.data.relation import BabelPointer
@@ -56,6 +58,7 @@ class PrerequisiteMap:
 	search: SynsetRetriever
 
 	def __init__(self) -> None:
+		self.logger = getLogger(__name__)
 		self.map = dict()
 		self.search = SynsetRetriever()
 
@@ -64,7 +67,7 @@ class PrerequisiteMap:
 		if len(synsets) == 0:
 			raise Exception(f'No synsets found for {name} in category {wiki_category}')
 		if len(synsets) > 1:
-			print(f'Multiple synsets found for {name} in category {wiki_category}. Using first. Possible: {synsets}')
+			self.logger.warning(f'Multiple synsets found for {name} in category {wiki_category}. Using first. Possible: {synsets}')
 		synset = synsets[0]
 		return self.get_concept(synset)
 
@@ -82,7 +85,7 @@ class PrerequisiteMap:
 	def _generate_definitions(self, synset: BabelSynset) -> List[Definition]:
 		definitions = []
 		categories = self.search.get_categories(synset)
-		for gloss in synset.glosses()[5:]: # TODO: Limited to 1 definition for testing
+		for gloss in synset.glosses()[:1]: # TODO: Limited to 1 definition for testing
 			prereqs = self._generate_prereqs(gloss.gloss, categories)
 			prereqs -= set([synset.id])
 			definitions.append(Definition(gloss.gloss, prereqs))
@@ -92,19 +95,19 @@ class PrerequisiteMap:
 		# TODO: Extract main phrase of sentence
 		parsed = self.model(definition)
 		prereqs = set()
-		print("Generating prereqs for definition:", definition)
+		self.logger.info(f"Generating prereqs for definition: {definition}")
 		for noun in parsed.noun_chunks:
 			cleaned_noun = self.clean_noun(noun.text)
 			if cleaned_noun == '':
 				continue
 			try:
 				synset_candidate = self.search.find_synset_like(cleaned_noun, parent_categories)
-				print(f"Prerequisite found: '{synset_candidate.main_sense().lemma}'")
+				self.logger.info(f"Prerequisite found: '{synset_candidate.main_sense().lemma}'")
 				prereqs.add(synset_candidate.id)
-			except NoSearchResultsError:
-				print(f"No results for {cleaned_noun}. Ignoring")
+			except NoSearchResultsError as e:
+				self.logger.warning(e)
 			except CommonWordError as e:
-				print(e)
+				self.logger.debug(e)
 		return prereqs
 
 	# TODO: Find spacy way of dropping stop words
@@ -148,11 +151,13 @@ class PrerequisiteMap:
 					# Topic Set: concept_id, child_id
 					# Naming (Optional): concept_id, concept_name
 					# Definitions: gloss_id, gloss
-	
+
 
 if __name__ == '__main__':
+	for handler in logging.root.handlers[:]:
+		logging.root.removeHandler(handler)
+	logging.basicConfig(filename='datasets/generated/latest.log', filemode='w', level=logging.DEBUG)
 	map = PrerequisiteMap()
 	concept = map.find_concept('Control Theory', 'Mathematics')
 	print(concept)
 	# map.print_all_prereqs(concept)
-	

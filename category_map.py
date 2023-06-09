@@ -1,5 +1,7 @@
+import logging
 import numpy as np
 from joblib import Memory
+from logging import getLogger
 from typing import Optional, List
 
 from category_map_generation import get_category_map, get_parent_tree
@@ -8,13 +10,14 @@ memory = Memory("datasets/cache")
 
 @memory.cache
 def _get_parent_tree():
-	print("Loading category tree...")
+	logging.info("Loading category tree...")
 	categorylinks, depths = get_category_map()
 	return get_parent_tree(categorylinks)
 
 
 class CategoryMap:
 	def __init__(self) -> None:
+		self.logger = getLogger(__name__)
 		self.root = 'Main_topic_classifications' # Not using 'Contents' because it's too broad
 		self.categories = _get_parent_tree()
 
@@ -33,7 +36,9 @@ class CategoryMap:
 		# ? Use minimum values to include all axis, not just minimum of both axes (then divide by longer list length)
 		# ? Would this be better?
 		min_distances = np.min(distances, axis=0).tolist() + np.min(distances, axis=1).tolist()
-		return 1 / np.average(min_distances) # ? Square root to scales the values to be more reasonable (still between 0 and 1)
+		commonality = 1 / np.average(min_distances) # ? Square root to scales the values to be more reasonable (still between 0 and 1)
+		self.logger.debug(f"Commonality of {commonality:.2f} between category lists: {valid_cats1} & {valid_cats2}")
+		return commonality
 
 	def categorical_distance(self, cat1: str, cat2: str) -> int:
 		path1 = self.category_path(cat1, self.root)
