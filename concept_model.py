@@ -1,13 +1,12 @@
-import spacy
 import logging
 from logging import getLogger
 from babelnet import BabelSynset
-from babelnet.resources import BabelSynsetID
-from babelnet.data.relation import BabelPointer
+from babelnet.resources import BabelSynsetID, WikipediaID
 from dataclasses import dataclass
 from typing import Set, Dict, List
 
-from synset_retriever import SynsetRetriever, id_to_name, get_synset, NoSearchResultsError, CommonWordError
+from synset_retriever import SynsetRetriever, id_to_name, get_synset, search_synsets
+from wiki_clickthrough_map import WikiMap
 
 
 @dataclass
@@ -30,6 +29,7 @@ class Definition:
 class Concept:
 	name: str
 	babel_id: BabelSynsetID
+	# TODO: Include WikipediaID?
 	topic_set: Set[BabelSynsetID]
 	definitions: List[Definition]
 
@@ -39,10 +39,10 @@ class Concept:
 			yield definition.gloss
 
 	def __str__(self):
-		ret = f'Concept: {self.name}\n'
+		ret = f'Concept: {self.name} ({self.babel_id})\n'
 		ret += 'Topic Set:\n'
 		for babel_id in self.topic_set:
-			ret += f'\t{id_to_name(babel_id)}\n'
+			ret += f'\t{id_to_name(babel_id)} ({babel_id})\n'
 		ret += 'Definitions:\n'
 		for i, definition in enumerate(self.definitions):
 			ret += f'{i + 1}. {definition}\n'
@@ -53,17 +53,16 @@ class Concept:
 
 
 class PrerequisiteMap:
-	model = spacy.load('en_core_web_sm')
-	map: Dict[BabelSynsetID, Concept]
-	search: SynsetRetriever
+	map: Dict[BabelSynsetID, Concept] # TODO: Switch BabelSynsetID to WikipediaID?
 
 	def __init__(self) -> None:
 		self.logger = getLogger(__name__)
 		self.map = dict()
-		self.search = SynsetRetriever()
+		self.babel = SynsetRetriever()
+		self.wiki = WikiMap()
 
 	def find_concept(self, name: str, wiki_category: str) -> Concept:
-		synsets = self.search.find_synset_in_category(name, wiki_category)
+		synsets = self.babel.find_synset_in_category(name, wiki_category)
 		if len(synsets) == 0:
 			raise Exception(f'No synsets found for {name} in category {wiki_category}')
 		if len(synsets) > 1:
@@ -74,7 +73,7 @@ class PrerequisiteMap:
 	def get_concept(self, synset: BabelSynset) -> Concept:
 		if synset.id in self.map:
 			return self.map[synset.id]
-		name = self.search.get_name(synset)
+		name = self.babel.get_name(synset)
 		definitions = self._generate_definitions(synset)
 		topic_set = self._generate_topic_set(synset)
 		concept = Concept(name, synset.id, topic_set, definitions)
@@ -84,47 +83,43 @@ class PrerequisiteMap:
 
 	def _generate_definitions(self, synset: BabelSynset) -> List[Definition]:
 		definitions = []
-		categories = self.search.get_categories(synset)
+		wiki_id = self.babel.get_wiki_id(synset).title
 		for gloss in synset.glosses()[:1]: # TODO: Limited to 1 definition for testing
-			prereqs = self._generate_prereqs(gloss.gloss, categories)
-			prereqs -= set([synset.id])
+			prereqs = self._generate_prereqs(wiki_id, gloss.gloss)
+			prereqs.discard(synset.id)
 			definitions.append(Definition(gloss.gloss, prereqs))
 		return definitions
 
-	def _generate_prereqs(self, definition: str, parent_categories: List[str]) -> Set[BabelSynsetID]:
+	def _generate_prereqs(self, wiki_id: str, definition: str) -> Set[BabelSynsetID]:
 		# TODO: Extract main phrase of sentence
-		parsed = self.model(definition)
+		self.logger.info(f"Generating prereqs for definition of {wiki_id}: {definition}")
 		prereqs = set()
-		self.logger.info(f"Generating prereqs for definition: {definition}")
-		for noun in parsed.noun_chunks:
-			cleaned_noun = self.clean_noun(noun.text)
-			if cleaned_noun == '':
-				continue
-			try:
-				synset_candidate = self.search.find_synset_like(cleaned_noun, parent_categories)
-				self.logger.info(f"Prerequisite found: '{synset_candidate.main_sense().lemma}'")
-				prereqs.add(synset_candidate.id)
-			except NoSearchResultsError as e:
-				self.logger.warning(e)
-			except CommonWordError as e:
-				self.logger.debug(e)
+		ct_links = self.wiki.get_clickthrough_names(wiki_id) # TODO: Pass as an argument?
+		for link_id, link_name in ct_links.items():
+			self.logger.debug(f"Searching for concept: {link_name} in definition")
+			if link_name.lower() in definition.lower():
+				self.logger.info(f"Prerequisite found: '{link_name}'")
+				synset = get_synset(WikipediaID(link_id, self.babel.lang))
+				if synset is None:
+					self.logger.warning(f"Synset not found for {link_name}")
+				else:
+					prereqs.add(synset.id)
 		return prereqs
 
-	# TODO: Find spacy way of dropping stop words
-	# TODO: Lemmatize?
-	def clean_noun(self, text: str) -> str:
-		words = text.split(' ')
-		words = [word for word in words if word not in self.model.Defaults.stop_words]
-		return ' '.join(words).lower()
-
-	@staticmethod
-	def _generate_topic_set(synset: BabelSynset) -> Set[BabelSynsetID]:
-		# TODO: Switch to WIKI only relations? Are these the correct relations?
-		# TODO: Search Wikipedia for clickthrough articles
-		relations = synset.outgoing_edges(BabelPointer.ANY_HOLONYM)
-		relations += synset.outgoing_edges(BabelPointer.ANY_HYPONYM)
-		relations += synset.outgoing_edges(BabelPointer.TOPIC)
-		return {relation.id_target for relation in relations}
+	def _generate_topic_set(self, synset: BabelSynset, score_threshold = 0.02, max_count = 10) -> Set[BabelSynsetID]:
+		"""Uses Wikipedia's clickthrough articles, normalized w/ a score threshold"""
+		wiki_id = self.babel.get_wiki_id(synset).title
+		ct_rates = self.wiki.get_clickthrough_rates(wiki_id, normalized=True)
+		ct_rates = ct_rates[ct_rates > score_threshold]
+		ct_rates = ct_rates.sort_values(ascending=False)[:max_count]
+		self.logger.debug(f'Clickthrough rates: {ct_rates.head(max_count)}')
+		synsets = [get_synset(WikipediaID(link_id, self.babel.lang)) for link_id in ct_rates.index]
+		for synset in synsets:
+			if synset is not None:
+				self.logger.debug(f'Topic concept: {synset.main_sense().full_lemma}')
+		ids = set(synset.id for synset in synsets if synset is not None)
+		ids.discard(synset.id)
+		return ids
 
 	# TODO: Move to an interface?
 	def print_all_prereqs(self, concept: Concept):
@@ -158,6 +153,6 @@ if __name__ == '__main__':
 		logging.root.removeHandler(handler)
 	logging.basicConfig(filename='datasets/generated/latest.log', filemode='w', level=logging.DEBUG)
 	map = PrerequisiteMap()
-	concept = map.find_concept('Control Theory', 'Mathematics')
+	concept = map.get_concept(search_synsets('Fresnel diffraction')[0])
 	print(concept)
-	# map.print_all_prereqs(concept)
+	map.print_all_prereqs(concept)

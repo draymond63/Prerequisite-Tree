@@ -4,7 +4,7 @@ from joblib import Memory
 from logging import getLogger
 from babelnet.sense import BabelSense
 from babelnet import BabelSynset, Language
-from babelnet.resources import BabelSynsetID
+from babelnet.resources import ResourceID, WikipediaID
 from babelnet.data.source import BabelSenseSource
 from typing import List, Optional
 
@@ -13,11 +13,11 @@ from category_map import CategoryMap
 memory = Memory("datasets/cache")
 
 @memory.cache(verbose=0)
-def get_synset(babel_id: BabelSynsetID) -> BabelSynset:
+def get_synset(babel_id: ResourceID) -> BabelSynset:
 	logging.info(f"Getting synset for '{babel_id}'...")
 	return bn.get_synset(babel_id)
 
-def id_to_name(babel_id: BabelSynsetID, lang=Language.EN) -> str:
+def id_to_name(babel_id: ResourceID, lang=Language.EN) -> str:
 	synset = get_synset(babel_id)
 	return synset.main_sense(lang).full_lemma
 
@@ -44,6 +44,7 @@ class SynsetRetriever():
 		self.lang = language
 		self.category_map = CategoryMap()
 
+	# TODO: No longer used it seems
 	def find_synset_like(self, name: str, categories: List[str]) -> BabelSynset:
 		self.logger.info(f"Finding synset like '{name}' with categories {categories}")
 		synsets = search_synsets(name, self.lang)
@@ -66,13 +67,11 @@ class SynsetRetriever():
 				break
 		if best_synset is None:
 			raise ValueError(f"No synsets found for '{name}' with categories {categories}.\nCandidates: {synsets}")
-		if len(best_synset.senses(source=BabelSenseSource.WN)):
-			raise CommonWordError(f"Synset '{self.get_name(best_synset)}' has wordnet senses, assuming {name} is a common word")
 		# TODO: Set minimum commonality threshold
 		self.logger.debug(f"Found synset '{self.get_name(best_synset)}' ({best_synset.id}) with categories "
 		                  f"{self.get_categories(best_synset)} (score = {best_commonality:.2f})")
 		return best_synset
-	
+
 	def get_categories(self, synset: BabelSynset) -> List[str]:
 		return [category.value for category in synset.categories(self.lang) if category.value in self.category_map.categories]
 
@@ -81,6 +80,9 @@ class SynsetRetriever():
 
 	def get_wiki_sense(self, synset: BabelSynset) -> BabelSense:
 		return synset.senses(language=self.lang, source=BabelSenseSource.WIKI)[0]
+	
+	def get_wiki_id(self, synset: BabelSynset) -> WikipediaID:
+		return WikipediaID(self.get_wiki_sense(synset).full_lemma.lower(), self.lang)
 
 	# TODO: Remove? Could be replaced by find_synset_like
 	def find_synset_in_category(self, name: str, wiki_category: str) -> List[BabelSynset]:
