@@ -16,6 +16,8 @@ tqdm = "==4.65.0"
 pydot = "*"
 graphviz = "*"
 babelnet = "*"
+thefuzz = "*"
+python-levenshtein = "*"
 
 [dev-packages]
 ipykernel = "*"

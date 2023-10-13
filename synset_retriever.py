@@ -3,6 +3,7 @@ import babelnet as bn
 from joblib import Memory
 from logging import getLogger
 from babelnet.sense import BabelSense
+from babelnet.synset import SynsetType
 from babelnet import BabelSynset, Language
 from babelnet.resources import ResourceID, WikipediaID
 from babelnet.data.source import BabelSenseSource
@@ -12,31 +13,32 @@ from category_map import CategoryMap
 
 memory = Memory("datasets/cache")
 
+
+def is_invalid_concept(synset: BabelSynset) -> bool:
+	return synset.type != SynsetType.CONCEPT or not len(synset.senses(source=BabelSenseSource.WIKI))
+
 @memory.cache(verbose=0)
-def get_synset(babel_id: ResourceID) -> BabelSynset:
+def get_synset(babel_id: ResourceID) -> Optional[BabelSynset]:
 	logging.info(f"Getting synset for '{babel_id}'...")
-	return bn.get_synset(babel_id)
+	synset = bn.get_synset(babel_id)
+	if synset is not None and not is_invalid_concept(synset):
+		return synset
 
 def id_to_name(babel_id: ResourceID, lang=Language.EN) -> str:
 	synset = get_synset(babel_id)
-	return synset.main_sense(lang).full_lemma
-
-def _is_invalid_concept(synset: BabelSynset) -> bool:
-	return synset.type != 'CONCEPT' or not len(synset.senses(source=BabelSenseSource.WIKI))
+	return synset.main_sense(lang).normalized_lemma
 
 @memory.cache(verbose=0)
 def search_synsets(name: str, lang=Language.EN) -> List[BabelSynset]:
 	if name == '':
 		raise ValueError("Cannot search for empty string")
 	logging.info(f"Searching synsets for '{name}'...")
-	return bn.get_synsets(name, from_langs={lang}, sources=[BabelSenseSource.WIKI], synset_filters=(_is_invalid_concept,))
+	return bn.get_synsets(name, from_langs={lang}, sources=[BabelSenseSource.WIKI], synset_filters=(is_invalid_concept,))
 
 
 class NoSearchResultsError(ValueError):
     """No search results found"""
 
-class CommonWordError(ValueError):
-	"""Search term is a common word"""
 
 class SynsetRetriever():
 	def __init__(self, language=Language.EN) -> None:
@@ -71,6 +73,9 @@ class SynsetRetriever():
 		self.logger.debug(f"Found synset '{self.get_name(best_synset)}' ({best_synset.id}) with categories "
 		                  f"{self.get_categories(best_synset)} (score = {best_commonality:.2f})")
 		return best_synset
+	
+	def get_wiki_synset(self, wiki_id: str) -> Optional[BabelSynset]:
+		return get_synset(WikipediaID(wiki_id.lower(), self.lang))
 
 	def get_categories(self, synset: BabelSynset) -> List[str]:
 		return [category.value for category in synset.categories(self.lang) if category.value in self.category_map.categories]

@@ -1,4 +1,6 @@
+import spacy
 import logging
+from thefuzz import fuzz, process
 from logging import getLogger
 from babelnet import BabelSynset
 from babelnet.resources import BabelSynsetID, WikipediaID
@@ -29,7 +31,7 @@ class Definition:
 class Concept:
 	name: str
 	babel_id: BabelSynsetID
-	# TODO: Include WikipediaID?
+	wiki_id: WikipediaID
 	topic_set: Set[BabelSynsetID]
 	definitions: List[Definition]
 
@@ -39,7 +41,7 @@ class Concept:
 			yield definition.gloss
 
 	def __str__(self):
-		ret = f'Concept: {self.name} ({self.babel_id})\n'
+		ret = f'Concept: {self.name} (W={self.wiki_id}, B={self.babel_id})\n'
 		ret += 'Topic Set:\n'
 		for babel_id in self.topic_set:
 			ret += f'\t{id_to_name(babel_id)} ({babel_id})\n'
@@ -53,13 +55,18 @@ class Concept:
 
 
 class PrerequisiteMap:
-	map: Dict[BabelSynsetID, Concept] # TODO: Switch BabelSynsetID to WikipediaID?
+	model = spacy.load('en_core_web_sm')
+	map: Dict[BabelSynsetID, Concept]
 
 	def __init__(self) -> None:
 		self.logger = getLogger(__name__)
 		self.map = dict()
 		self.babel = SynsetRetriever()
 		self.wiki = WikiMap()
+
+	@property
+	def category_map(self):
+		return self.babel.category_map
 
 	def find_concept(self, name: str, wiki_category: str) -> Concept:
 		synsets = self.babel.find_synset_in_category(name, wiki_category)
@@ -76,9 +83,9 @@ class PrerequisiteMap:
 		name = self.babel.get_name(synset)
 		definitions = self._generate_definitions(synset)
 		topic_set = self._generate_topic_set(synset)
-		concept = Concept(name, synset.id, topic_set, definitions)
+		wiki_id = self.babel.get_wiki_id(synset)
+		concept = Concept(name, synset.id, wiki_id, topic_set, definitions)
 		self.map[concept.babel_id] = concept
-		# TODO: New concept must ensure DAG
 		return concept
 
 	def _generate_definitions(self, synset: BabelSynset) -> List[Definition]:
@@ -90,40 +97,72 @@ class PrerequisiteMap:
 			definitions.append(Definition(gloss.gloss, prereqs))
 		return definitions
 
-	def _generate_prereqs(self, wiki_id: str, definition: str) -> Set[BabelSynsetID]:
+	def _generate_prereqs(self, wiki_id: str, definition: str, str_match_threshold = 0.6, commonality_threshold = 0.5) -> Set[BabelSynsetID]:
+		"""Assumes all prereqs are linked in the wiki article"""
 		# TODO: Extract main phrase of sentence
 		self.logger.info(f"Generating prereqs for definition of {wiki_id}: {definition}")
+		parsed = self.model(definition)
 		prereqs = set()
-		ct_links = self.wiki.get_clickthrough_names(wiki_id) # TODO: Pass as an argument?
-		for link_id, link_name in ct_links.items():
-			self.logger.debug(f"Searching for concept: {link_name} in definition")
-			if link_name.lower() in definition.lower():
-				self.logger.info(f"Prerequisite found: '{link_name}'")
-				synset = get_synset(WikipediaID(link_id, self.babel.lang))
-				if synset is None:
-					self.logger.warning(f"Synset not found for {link_name}")
-				else:
-					prereqs.add(synset.id)
+		ct_links = self.wiki.get_clickthrough_links(wiki_id)
+		# TODO: Low ct_link counts result in few candidates and bad results
+		if not len(ct_links):
+			self.logger.warning(f"No clickthrough links found for '{wiki_id}'")
+			return prereqs
+		ct_titles = {link: WikiMap.link_to_title(link) for link in ct_links}
+		for noun in parsed.noun_chunks:
+			matches = process.extractBests(noun.text, ct_titles, scorer=fuzz.token_sort_ratio, score_cutoff=str_match_threshold * 100)
+			links = [link for name, score, link in matches]
+			self.logger.debug(f"Possible matches for '{noun}': {links}")
+			if not len(links):
+				continue
+			# Select link with highest categorical commonality
+			commonalities = self.compare_commonalities(wiki_id, links)
+			if not len(commonalities):
+				continue
+			concept_link = max(commonalities, key=commonalities.get)
+			if commonalities[concept_link] < commonality_threshold:
+				self.logger.debug(f"Commonality of '{concept_link}' is too low: {commonalities}")
+				continue
+			self.logger.info(f"Prerequisite found: '{concept_link}'")
+			synset = self.babel.get_wiki_synset(concept_link)
+			# Not all wikipedia articles are concepts, so they might not exist in babelnet
+			if synset is None:
+				self.logger.warning(f"Synset not found for {concept_link}")
+			else:
+				# TODO: New prereq relation must ensure DAG
+				if synset.id in self.map:
+					self.logger.debug(f"Linked existing concepts! {concept_link} is a prereq of {wiki_id}. DAG violation?")
+				prereqs.add(synset.id)
 		return prereqs
 
-	def _generate_topic_set(self, synset: BabelSynset, score_threshold = 0.02, max_count = 10) -> Set[BabelSynsetID]:
+	def compare_commonalities(self, wiki_link, compared_links):
+		commonalities = {}
+		wiki_categories = self.babel.get_categories(self.babel.get_wiki_synset(wiki_link))
+		for link in compared_links:
+			# TODO: Get categories from map dataset, not babelnet
+			link_synset = self.babel.get_wiki_synset(link)
+			if link_synset is not None:
+				link_categories = self.babel.get_categories(link_synset)
+				commonalities[link] = self.category_map.categorical_commonality(link_categories, wiki_categories)
+		return commonalities
+
+	# TODO: Is the score threshold necessary?
+	def _generate_topic_set(self, synset: BabelSynset, score_threshold = 0.02) -> Set[BabelSynsetID]:
 		"""Uses Wikipedia's clickthrough articles, normalized w/ a score threshold"""
 		wiki_id = self.babel.get_wiki_id(synset).title
-		ct_rates = self.wiki.get_clickthrough_rates(wiki_id, normalized=True)
+		ct_rates = self.wiki.get_clickthrough_rates(wiki_id, source_normalized=True)
 		ct_rates = ct_rates[ct_rates > score_threshold]
-		ct_rates = ct_rates.sort_values(ascending=False)[:max_count]
-		self.logger.debug(f'Clickthrough rates: {ct_rates.head(max_count)}')
-		synsets = [get_synset(WikipediaID(link_id, self.babel.lang)) for link_id in ct_rates.index]
-		for synset in synsets:
-			if synset is not None:
-				self.logger.debug(f'Topic concept: {synset.main_sense().full_lemma}')
+		ct_rates = ct_rates.sort_values(ascending=False)
+		self.logger.debug(f'Clickthrough rates: {ct_rates.head(10)} ({len(ct_rates)} total)')
+		synsets = [self.babel.get_wiki_synset(link_id) for link_id in ct_rates.index]
+		# Not all wikipedia articles are concepts, so they might not exist in babelnet
 		ids = set(synset.id for synset in synsets if synset is not None)
 		ids.discard(synset.id)
 		return ids
 
 	# TODO: Move to an interface?
 	def print_all_prereqs(self, concept: Concept):
-		print(f'Prerequisites for {concept.name}:')
+		print(f'Prerequisites for "{concept.name}":')
 		for i, definition in enumerate(concept.definitions, 1):
 			print(f'{i}. {definition}')
 			for babel_id in definition.prereqs:
@@ -153,6 +192,6 @@ if __name__ == '__main__':
 		logging.root.removeHandler(handler)
 	logging.basicConfig(filename='datasets/generated/latest.log', filemode='w', level=logging.DEBUG)
 	map = PrerequisiteMap()
-	concept = map.get_concept(search_synsets('Fresnel diffraction')[0])
+	concept = map.find_concept('Control Theory', 'Mathematics')
 	print(concept)
 	map.print_all_prereqs(concept)
