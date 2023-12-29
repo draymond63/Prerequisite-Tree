@@ -188,7 +188,7 @@ class PrerequisiteMap:
 
 
 if __name__ == '__main__':
-	for handler in logging.root.handlers[:]:
+	for handler in logging.root.handlers:
 		logging.root.removeHandler(handler)
 	logging.basicConfig(filename='datasets/generated/latest.log', filemode='w', level=logging.DEBUG)
 	map = PrerequisiteMap()
