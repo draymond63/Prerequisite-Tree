@@ -51,10 +51,11 @@ def remove_hidden_categories(df: pd.DataFrame) -> pd.DataFrame:
 	hidden_categories = df[df['category'] == 'Hidden_categories']['item']
 	return df[~(df['item'].isin(hidden_categories) & df['category'].isin(hidden_categories))]
 
-def get_raw_relations(path = 'datasets/raw/enwiki-latest-categorylinks.csv'):
-	df = pd.read_csv(path)
-	df.columns = ['item', 'category', 'relation']
-	df = df.filter(items=['item', 'category'], axis=1)
+def get_raw_relations(path = 'datasets/raw/enwiki-categories.tsv'):
+	df = pd.read_csv(path, sep='\t')
+	df.columns = ['item', 'category', 'relation'] # relation is always file, subcat, or page
+	df.drop(columns=['relation'], inplace=True)
+	return df
 
 # 7978906 -> 3336171 entries
 def generate_category_map(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]:
@@ -69,7 +70,7 @@ def generate_category_map(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame]
 	return df, depths
 
 
-def get_category_map(source_path = 'datasets/raw/enwiki-latest-categorylinks.csv', 
+def get_category_map(source_path = 'datasets/raw/enwiki-categories.tsv', 
 					 save_path = 'datasets/generated/valid_category_links.tsv', 
 					 depths_path = 'datasets/generated/category_depths.tsv'):
 	if os.path.exists(save_path) and os.path.exists(depths_path):

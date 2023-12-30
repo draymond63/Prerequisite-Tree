@@ -14,8 +14,8 @@ def _get_ct_links(path = 'datasets/raw/clickstream-enwiki-2023-05.tsv') -> pd.Da
 
 
 class WikiMap:
-    def __init__(self) -> None:
-        self.ct_links = _get_ct_links()
+    def __init__(self, path='datasets/raw/clickstream-enwiki-2023-05.tsv') -> None:
+        self.ct_links = _get_ct_links(path)
 
     def get_clickthrough_links(self, wiki_id: str) -> List[str]:
         links = self.ct_links[self.ct_links['source'] == wiki_id]['target']

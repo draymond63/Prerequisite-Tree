@@ -37,21 +37,10 @@ def values_sanity_check(values):
     return True
 
 
-def parse_values(values: str, outfile, columns: Optional[List[int]]=None):
+def parse_values(values: str):
     """
     Given a file handle and the raw values from a MySQL INSERT
     statement, write the equivalent CSV to the file
-
-    Parameters
-    ----------
-    values : str
-        Raw values from a MySQL INSERT statement. May contain multiple CSV lines
-    outfile : file handle
-        A file handle to write the CSV to
-    columns : list, optional
-        Which columns to keep in the CSV. If not specified, all columns are kept
-    row_filter : callable, optional
-        A function with signature f(row[columns]) -> bool that returns whether to keep a row
     """
     latest_row = []
 
@@ -62,7 +51,6 @@ def parse_values(values: str, outfile, columns: Optional[List[int]]=None):
                         strict=True
     )
 
-    writer = csv.writer(outfile, quoting=csv.QUOTE_MINIMAL)
     for reader_row in reader:
         for column in reader_row:
             # If our current string is empty...
@@ -89,9 +77,7 @@ def parse_values(values: str, outfile, columns: Optional[List[int]]=None):
                 # If we've found a new row, write it out
                 # and begin our new one
                 if new_row:
-                    if columns is not None:
-                        latest_row = [latest_row[i] for i in columns]
-                    writer.writerow(latest_row)
+                    yield latest_row
                     latest_row = []
                 # If we're beginning a new row, eliminate the
                 # opening parentheses.
@@ -105,21 +91,72 @@ def parse_values(values: str, outfile, columns: Optional[List[int]]=None):
         # the close paren.
         if latest_row[-1][-2:] == ");":
             latest_row[-1] = latest_row[-1][:-2]
-            if columns is not None:
-                latest_row = [latest_row[i] for i in columns]
-            writer.writerow(latest_row)
+            yield latest_row
 
 
-def sqldump_to_csv(source_file, outfile, columns: Optional[List[int]]=None):
+def parse_sql_file(file, row_filter=None, columns: Optional[List[int]]=None):
+    """
+    Given a file handle of a MySQL dump file, generate rows
+
+    Parameters
+    ----------
+    file : file handle
+        File handle of MySQL dump file
+    row_filter : function, optional
+        Function which takes a row and returns True if it should be kept
+    columns : list, optional
+        Which columns to keep in the CSV. If not specified, all columns are kept
+    """
+    for line in file:
+        if is_insert(line):
+            values = get_values(line)
+            if values_sanity_check(values):
+                for row in parse_values(values):
+                    if row_filter is None or row_filter(row):
+                        if columns is not None:
+                            row = [row[i] for i in columns]
+                        yield row
+
+
+def sqldump_to_csv(source_file, outfile, row_filter=None, columns: Optional[List[int]]=None):
+    """
+    Parameters
+    ----------
+    columns : list, optional
+        Which columns to keep in the CSV. If not specified, all columns are kept
+    """
     try:
-        for line in tqdm(source_file):
-            # Look for an INSERT statement and parse it.
-            if is_insert(line):
-                values = get_values(line)
-                if values_sanity_check(values):
-                    parse_values(values, outfile, columns)
+        writer = csv.writer(outfile, quoting=csv.QUOTE_MINIMAL)
+        for row in parse_sql_file(source_file, row_filter, columns):
+            writer.writerow(row)
     except KeyboardInterrupt:
-        sys.exit(0)
+        quit(0)
+
+
+def sqldump_to_csv_path(source_path: str, outpath: str, row_filter=None, columns=None, source_encoding='iso-8859-1', out_encoding='utf-8'):
+    with open(source_path, 'r', encoding=source_encoding) as infile:
+        with open(outpath, 'w', encoding=out_encoding) as outfile:
+            sqldump_to_csv(infile, outfile, row_filter, columns)
+
+
+def peak_file(path: str, rows=5, start=0):
+    assert rows > 0 and start >= 0, f"Invalid rows ({rows}) or start ({start})"
+    with open(path, 'r') as f:
+        for i, line in enumerate(f):
+            if start < i < start + rows:
+                print(line)
+            elif i > start + rows:
+                break
+
+
+def peak_sql(path: str, rows=5, start=0, **kwargs):
+    assert rows > 0 and start >= 0, f"Invalid rows ({rows}) or start ({start})"
+    with open(path, 'r', encoding="iso-8859-1") as f:
+        for i, line in enumerate(parse_sql_file(f, **kwargs)):
+            if start < i < start + rows:
+                print(line)
+            elif i > start + rows:
+                break
 
 
 def main():
@@ -131,7 +168,4 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-    # with open('datasets/raw/enwiki-latest-categorylinks.sql', 'r', encoding='iso-8859-1') as f: 
-    #     with open('datasets\raw\enwiki-latest-categorylinks.csv', 'w', encoding='utf-8') as outfile:
-    #         sqldump_to_csv(f, outfile, columns=[0, 1, 6])
+    # peak_file('datasets/raw/enwiki-categories.tsv')

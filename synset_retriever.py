@@ -14,14 +14,14 @@ from category_map import CategoryMap
 memory = Memory("datasets/cache")
 
 
-def is_invalid_concept(synset: BabelSynset) -> bool:
-	return synset.type != SynsetType.CONCEPT or not len(synset.senses(source=BabelSenseSource.WIKI))
+def is_valid_concept(synset: BabelSynset) -> bool:
+	return synset.type == SynsetType.CONCEPT and len(synset.senses(source=BabelSenseSource.WIKI))
 
 @memory.cache(verbose=0)
 def get_synset(babel_id: ResourceID) -> Optional[BabelSynset]:
 	logging.info(f"Getting synset for '{babel_id}'...")
 	synset = bn.get_synset(babel_id)
-	if synset is not None and not is_invalid_concept(synset):
+	if synset is not None and is_valid_concept(synset):
 		return synset
 
 def id_to_name(babel_id: ResourceID, lang=Language.EN) -> str:
@@ -33,7 +33,7 @@ def search_synsets(name: str, lang=Language.EN) -> List[BabelSynset]:
 	if name == '':
 		raise ValueError("Cannot search for empty string")
 	logging.info(f"Searching synsets for '{name}'...")
-	return bn.get_synsets(name, from_langs={lang}, sources=[BabelSenseSource.WIKI], synset_filters=(is_invalid_concept,))
+	return bn.get_synsets(name, from_langs={lang}, sources=[BabelSenseSource.WIKI], synset_filters={is_valid_concept})
 
 
 class NoSearchResultsError(ValueError):
@@ -92,6 +92,8 @@ class SynsetRetriever():
 	# TODO: Remove? Could be replaced by find_synset_like
 	def find_synset_in_category(self, name: str, wiki_category: str) -> List[BabelSynset]:
 		synsets = search_synsets(name, self.lang)
+		print(f"Found {len(synsets)} synsets for '{name}'")
+		print(synsets)
 		if len(synsets) == 0:
 			return []
 		paths = [self.synset_category_path(synset, wiki_category) for synset in synsets]
@@ -112,3 +114,10 @@ class SynsetRetriever():
 					possible_paths.append([category_str, *path])
 		if len(possible_paths):
 			return min(possible_paths, key=len)
+
+
+if __name__ == "__main__":
+	# for synset in bn.get_synsets("Control Theory", from_langs={Language.EN}, sources=[BabelSenseSource.WIKI]):
+	# 	print(synset.type)
+	# 	print(synset.senses(source=BabelSenseSource.WIKI))
+	print(search_synsets("Control Theory"))
