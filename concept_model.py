@@ -1,13 +1,12 @@
 import spacy
 import logging
-from thefuzz import fuzz, process
 from logging import getLogger
 from babelnet import BabelSynset
 from babelnet.resources import BabelSynsetID, WikipediaID
 from dataclasses import dataclass
 from typing import Set, Dict, List
 
-from synset_retriever import SynsetRetriever, id_to_name, get_synset, search_synsets
+from synset_retriever import SynsetRetriever, id_to_name, get_synset
 from wiki_clickthrough_map import WikiMap
 
 
@@ -68,72 +67,68 @@ class PrerequisiteMap:
 	def category_map(self):
 		return self.babel.category_map
 
-	def find_concept(self, name: str, wiki_category: str) -> Concept:
+	def find_concept(self, name: str, wiki_category: str, definition_limit=None) -> Concept:
 		synsets = self.babel.find_synset_in_category(name, wiki_category)
 		if len(synsets) == 0:
 			raise Exception(f'No synsets found for {name} in category {wiki_category}')
 		if len(synsets) > 1:
 			self.logger.warning(f'Multiple synsets found for {name} in category {wiki_category}. Using first. Possible: {synsets}')
 		synset = synsets[0]
-		return self.get_concept(synset)
+		return self.get_concept(synset, definition_limit)
 
-	def get_concept(self, synset: BabelSynset) -> Concept:
+	def get_concept(self, synset: BabelSynset, definition_limit=None) -> Concept:
 		if synset.id in self.map:
 			return self.map[synset.id]
 		name = self.babel.get_name(synset)
-		definitions = self._generate_definitions(synset)
+		definitions = self._generate_definitions(synset, limit=definition_limit)
 		topic_set = self._generate_topic_set(synset)
 		wiki_id = self.babel.get_wiki_id(synset)
 		concept = Concept(name, synset.id, wiki_id, topic_set, definitions)
 		self.map[concept.babel_id] = concept
 		return concept
 
-	def _generate_definitions(self, synset: BabelSynset) -> List[Definition]:
+	def _generate_definitions(self, synset: BabelSynset, limit=None) -> List[Definition]:
 		definitions = []
 		wiki_id = self.babel.get_wiki_id(synset).title
-		for gloss in synset.glosses()[:1]: # TODO: Limited to 1 definition for testing
-			prereqs = self._generate_prereqs(wiki_id, gloss.gloss)
-			prereqs.discard(synset.id)
+		categories = self.babel.get_categories(synset)
+		glosses = synset.glosses()
+		if limit is not None:
+			glosses = glosses[:limit]
+		for gloss in glosses:
+			prereqs = self._generate_prereqs(wiki_id, gloss.gloss, categories)
 			definitions.append(Definition(gloss.gloss, prereqs))
 		return definitions
 
-	def _generate_prereqs(self, wiki_id: str, definition: str, str_match_threshold = 0.6, commonality_threshold = 0.5) -> Set[BabelSynsetID]:
+	def _generate_prereqs(self, wiki_id: str, definition: str, parent_categories: List[str], commonality_threshold=0.5) -> Set[BabelSynsetID]:
 		"""Assumes all prereqs are linked in the wiki article"""
 		# TODO: Extract main phrase of sentence
 		self.logger.info(f"Generating prereqs for definition of {wiki_id}: {definition}")
 		parsed = self.model(definition)
 		prereqs = set()
-		ct_links = self.wiki.get_clickthrough_links(wiki_id)
-		# TODO: Low ct_link counts result in few candidates and bad results
-		if not len(ct_links):
-			self.logger.warning(f"No clickthrough links found for '{wiki_id}'")
-			return prereqs
-		ct_titles = {link: WikiMap.link_to_title(link) for link in ct_links}
 		for noun in parsed.noun_chunks:
-			matches = process.extractBests(noun.text, ct_titles, scorer=fuzz.token_sort_ratio, score_cutoff=str_match_threshold * 100)
-			links = [link for name, score, link in matches]
-			self.logger.debug(f"Possible matches for '{noun}': {links}")
-			if not len(links):
+			cleaned_noun = self._clean_noun(noun.text)
+			if cleaned_noun == '':
+				self.logger.debug(f"Skipping empty noun: {noun.text}")
 				continue
-			# Select link with highest categorical commonality
-			commonalities = self.compare_commonalities(wiki_id, links)
-			if not len(commonalities):
-				continue
-			concept_link = max(commonalities, key=commonalities.get)
-			if commonalities[concept_link] < commonality_threshold:
-				self.logger.debug(f"Commonality of '{concept_link}' is too low: {commonalities}")
-				continue
-			self.logger.info(f"Prerequisite found: '{concept_link}'")
-			synset = self.babel.get_wiki_synset(concept_link)
-			# Not all wikipedia articles are concepts, so they might not exist in babelnet
+			synset = self.babel.find_synset_like(cleaned_noun, parent_categories, commonality_threshold)
 			if synset is None:
-				self.logger.warning(f"Synset not found for {concept_link}")
-			else:
+				self.logger.warning(f"Synset not found for {cleaned_noun}")
+			elif synset.id in self.map:
 				# TODO: New prereq relation must ensure DAG
-				if synset.id in self.map:
-					self.logger.debug(f"Linked existing concepts! {concept_link} is a prereq of {wiki_id}. DAG violation?")
+				self.logger.debug(f"Linked existing concepts! {self.babel.get_name(synset)} is a prereq of {wiki_id}. DAG violation?")
 				prereqs.add(synset.id)
+			else:
+				self.logger.info(f"Prerequisite found: '{self.babel.get_name(synset)}' ({synset.id})")
+				prereqs.add(synset.id)
+		prereqs.discard(synset.id)
 		return prereqs
+
+	# TODO: Find spacy way of dropping stop words
+	# TODO: Lemmatize?
+	def _clean_noun(self, text: str) -> str:
+		words = text.split(' ')
+		words = [word for word in words if word not in self.model.Defaults.stop_words]
+		return ' '.join(words).lower()
 
 	def compare_commonalities(self, wiki_link, compared_links):
 		commonalities = {}
@@ -147,6 +142,7 @@ class PrerequisiteMap:
 		return commonalities
 
 	# TODO: Is the score threshold necessary?
+	# TODO: Ensure there is traffic between the two articles flows both ways?
 	def _generate_topic_set(self, synset: BabelSynset, score_threshold = 0.02) -> Set[BabelSynsetID]:
 		"""Uses Wikipedia's clickthrough articles, normalized w/ a score threshold"""
 		wiki_id = self.babel.get_wiki_id(synset).title
@@ -164,15 +160,16 @@ class PrerequisiteMap:
 	def print_all_prereqs(self, concept: Concept):
 		print(f'Prerequisites for "{concept.name}":')
 		for i, definition in enumerate(concept.definitions, 1):
-			print(f'{i}. {definition}')
-			for babel_id in definition.prereqs:
-				do_learn = input(f'Learn about {id_to_name(babel_id)}? (y/n): ')
-				if do_learn == 'y':
-					self.print_all_prereqs(self.get_concept(get_synset(babel_id)))
-			if i < len(concept.definitions):
-				keep_going = input(f"Continue to next definition of {concept.name} ({i}/{len(concept.definitions)})? (y/n): ")
+			if i > 1:
+				keep_going = input(f"Continue to next definition of {concept.name} ({i}/{len(concept.definitions)})? (y/N): ")
 				if keep_going != 'y':
 					return
+			print(f'{i}. {definition}')
+			if len(definition.prereqs) != 0:
+				for babel_id in definition.prereqs:
+					do_learn = input(f'Learn about {id_to_name(babel_id)}? (y/N): ')
+					if do_learn == 'y':
+						self.print_all_prereqs(self.get_concept(get_synset(babel_id)))
 
 	# TODO: Save map to a standard format. Duck DB?
 	def save(self, path: str) -> None:
@@ -192,6 +189,6 @@ if __name__ == '__main__':
 		logging.root.removeHandler(handler)
 	logging.basicConfig(filename='datasets/generated/latest.log', filemode='w', level=logging.DEBUG)
 	map = PrerequisiteMap()
-	concept = map.find_concept('Control Theory', 'Mathematics')
+	concept = map.find_concept('Control Theory', 'Mathematics', definition_limit=2)
 	print(concept)
 	map.print_all_prereqs(concept)

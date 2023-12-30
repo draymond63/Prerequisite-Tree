@@ -36,9 +36,6 @@ def search_synsets(name: str, lang=Language.EN) -> List[BabelSynset]:
 	return bn.get_synsets(name, from_langs={lang}, sources=[BabelSenseSource.WIKI], synset_filters={is_valid_concept})
 
 
-class NoSearchResultsError(ValueError):
-    """No search results found"""
-
 
 class SynsetRetriever():
 	def __init__(self, language=Language.EN) -> None:
@@ -46,12 +43,11 @@ class SynsetRetriever():
 		self.lang = language
 		self.category_map = CategoryMap()
 
-	# TODO: No longer used it seems
-	def find_synset_like(self, name: str, categories: List[str]) -> BabelSynset:
+	def find_synset_like(self, name: str, categories: List[str], commonality_threshold=0.25) -> Optional[BabelSynset]:
 		self.logger.info(f"Finding synset like '{name}' with categories {categories}")
 		synsets = search_synsets(name, self.lang)
 		if len(synsets) == 0:
-			raise NoSearchResultsError(f"No synsets found for '{name}'")
+			return None
 		best_synset = None
 		best_commonality = 0
 		self.logger.debug(f"Found {len(synsets)} synsets for '{name}'")
@@ -68,8 +64,12 @@ class SynsetRetriever():
 			if best_commonality == 1: # Perfect match, no need to continue
 				break
 		if best_synset is None:
-			raise ValueError(f"No synsets found for '{name}' with categories {categories}.\nCandidates: {synsets}")
-		# TODO: Set minimum commonality threshold
+			self.logger.warning(f"No synsets found for '{name}' with categories {categories}.\nCandidates: {synsets}")
+			return None
+		if best_commonality < commonality_threshold:
+			self.logger.warning(f"Synset '{self.get_name(best_synset)}' ({best_synset.id}) has low commonality "
+			                    f"({best_commonality:.2f} < {commonality_threshold:.2f})")
+			return None
 		self.logger.debug(f"Found synset '{self.get_name(best_synset)}' ({best_synset.id}) with categories "
 		                  f"{self.get_categories(best_synset)} (score = {best_commonality:.2f})")
 		return best_synset
