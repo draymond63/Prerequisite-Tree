@@ -2,3 +2,4 @@ datasets/
 *__pycache__/
 *playground.*
 babelnet_conf.yml
+.vscode
